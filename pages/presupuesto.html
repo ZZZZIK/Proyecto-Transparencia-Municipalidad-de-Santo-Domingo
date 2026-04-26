@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Presupuesto Municipal — Municipalidad de Santo Domingo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Slab:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="../css/custom.css">
+</head>
+<body>
+  <div class="gob-top-bar"><div class="container d-flex justify-content-between align-items-center"><div class="d-flex align-items-center"><div class="gob-flag"><span class="gob-flag-blue"></span><span class="gob-flag-white"></span><span class="gob-flag-red"></span></div><a href="https://www.gob.cl" target="_blank">Gobierno de Chile</a></div><div class="a11y-bar"><button data-a11y-contrast><span class="material-icons" style="font-size:14px">contrast</span></button><button data-a11y-size="decrease">A-</button><button data-a11y-size="increase">A+</button></div></div></div>
+  <header class="header-institucional"><div class="container d-flex align-items-center flex-wrap"><div class="logo-container"><img src="../assets/img/logo-municipalidad.png" alt="Escudo"><h1 class="institution-name">Municipalidad de Santo Domingo<small>Portal de Transparencia Activa</small></h1></div></div></header>
+  <nav class="nav-main navbar navbar-expand-lg"><div class="container"><button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navMain" style="color:#fff;border-color:rgba(255,255,255,0.3)"><span class="material-icons">menu</span></button><div class="collapse navbar-collapse" id="navMain"><ul class="navbar-nav"><li class="nav-item"><a class="nav-link" href="../index.html"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">home</span> Inicio</a></li><li class="nav-item"><a class="nav-link" href="destino-impuestos.html"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">account_balance_wallet</span> Destino de Impuestos</a></li><li class="nav-item"><a class="nav-link active" href="presupuesto.html"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">pie_chart</span> Presupuesto Municipal</a></li></ul></div></div></nav>
+  <div class="breadcrumb-gov"><div class="container"><nav aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../index.html">Inicio</a></li><li class="breadcrumb-item active">Presupuesto Municipal</li></ol></nav></div></div>
+  <main>
+    <section class="page-hero" style="background:linear-gradient(135deg,#006FB3 0%,#0A132D 100%)"><div class="container"><h1><span class="material-icons mr-2" style="font-size:2rem;vertical-align:middle">pie_chart</span>Presupuesto Municipal</h1><p>Presupuesto asignado y nivel de ejecución presupuestaria 2025.</p></div></section>
+    <div class="container">
+      <!-- Filtros Año/Mes -->
+      <div class="filter-panel" style="margin-top:-15px;margin-bottom:15px;position:relative;z-index:2">
+        <div class="row align-items-end">
+          <div class="col-md-3"><label>Año:</label><select class="form-control form-control-sm" id="filterAnio"><option value="2025" selected>2025</option><option value="2024">2024</option><option value="2023">2023</option></select></div>
+          <div class="col-md-3"><label>Mes:</label><select class="form-control form-control-sm" id="filterMes"><option value="anual" selected>Anual (completo)</option><option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option><option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option></select></div>
+          <div class="col-md-6 text-right" style="font-size:.8rem;color:var(--gob-gray-text);padding-top:20px"><span class="material-icons mr-1" style="font-size:14px;vertical-align:middle">info</span> Seleccione período para filtrar</div>
+        </div>
+      </div>
+      <div class="row mb-4">
+        <div class="col-md-3 col-6 mb-3"><div class="stat-card"><div class="stat-value" style="color:#006FB3" id="sIngresos">$12.850M</div><div class="stat-label">Presupuesto Ingresos</div></div></div>
+        <div class="col-md-3 col-6 mb-3"><div class="stat-card"><div class="stat-value" style="color:#E8433E" id="sGastos">$11.920M</div><div class="stat-label">Presupuesto Gastos</div></div></div>
+        <div class="col-md-3 col-6 mb-3"><div class="stat-card"><div class="stat-value" style="color:#52B788" id="sSuperavit">$930M</div><div class="stat-label">Superávit</div></div></div>
+        <div class="col-md-3 col-6 mb-3"><div class="stat-card"><div class="stat-value" style="color:#F77F00" id="sEjec">92.7%</div><div class="stat-label">Ejecución</div></div></div>
+      </div>
+      <div class="section-title"><span class="material-icons">bar_chart</span><h2>Ejecución Presupuestaria por Área</h2></div>
+      <div id="chartPresupuesto"></div>
+      <div id="tablePresupuesto" class="mt-4"></div>
+    </div>
+  </main>
+  <footer class="footer-gov"><div class="container"><div class="footer-bottom"><p>© 2026 I. Municipalidad de Santo Domingo</p></div></div></footer>
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script><script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script><script src="../js/app.js"></script><script src="../js/tables.js"></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const baseItems = [
+      {area:'Educación',asignado:3576000000,ejecutado:3312000000,pctEjec:92.6},
+      {area:'Salud',asignado:2384000000,ejecutado:2265000000,pctEjec:95.0},
+      {area:'Seguridad Ciudadana',asignado:1430000000,ejecutado:1358000000,pctEjec:95.0},
+      {area:'Obras Municipales',asignado:1192000000,ejecutado:1048000000,pctEjec:87.9},
+      {area:'Servicios Comunitarios',asignado:952000000,ejecutado:895000000,pctEjec:94.0},
+      {area:'Medio Ambiente',asignado:714000000,ejecutado:678000000,pctEjec:95.0},
+      {area:'Cultura y Deporte',asignado:595000000,ejecutado:535000000,pctEjec:89.9},
+      {area:'Administración',asignado:1077000000,ejecutado:829000000,pctEjec:77.0}
+    ];
+    const multipliers = {'2025':1,'2024':0.93,'2023':0.86};
+    const colors = ['#2E86AB','#E8433E','#1B4332','#F77F00','#7209B7','#52B788','#E09F3E','#6C757D'];
+    const fmt = v => '$'+(v>=1e9?(v/1e9).toFixed(3)+'M': v>=1e6?(v/1e6).toFixed(0)+'M': new Intl.NumberFormat('es-CL').format(v));
+
+    function render() {
+      const anio = document.getElementById('filterAnio').value;
+      const mes = document.getElementById('filterMes').value;
+      const mult = multipliers[anio]||1;
+      const div = mes==='anual'?1:12;
+      const items = baseItems.map(it => ({
+        area:it.area, asignado:Math.round(it.asignado*mult/div), ejecutado:Math.round(it.ejecutado*mult/div), pctEjec:it.pctEjec
+      }));
+      const totI = items.reduce((s,i)=>s+i.asignado,0);
+      const totG = items.reduce((s,i)=>s+i.ejecutado,0);
+      document.getElementById('sIngresos').textContent = fmt(totI);
+      document.getElementById('sGastos').textContent = fmt(totG);
+      document.getElementById('sSuperavit').textContent = fmt(totI-totG);
+      document.getElementById('sEjec').textContent = (totG/totI*100).toFixed(1)+'%';
+      document.getElementById('chartPresupuesto').innerHTML = '';
+      App.renderBarChart('chartPresupuesto', items.map((it,i) => ({label:it.area,value:it.ejecutado,color:colors[i]})));
+      if(window._tables['tablePresupuesto']) window._tables['tablePresupuesto'].updateData(items);
+      else window._tables['tablePresupuesto'] = new DynamicTable('tablePresupuesto',{data:items,columns:[
+        {key:'area',label:'Área',type:'text'},{key:'asignado',label:'Asignado ($)',type:'currency'},
+        {key:'ejecutado',label:'Ejecutado ($)',type:'currency'},{key:'pctEjec',label:'% Ejecución',type:'percent'}
+      ]});
+    }
+    document.getElementById('filterAnio').addEventListener('change', render);
+    document.getElementById('filterMes').addEventListener('change', render);
+    render();
+  });
+  </script>
+</body>
+</html>
