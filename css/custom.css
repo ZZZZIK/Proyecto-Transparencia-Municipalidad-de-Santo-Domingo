@@ -1,6 +1,6 @@
 /* ============================================
    Portal Transparencia - Municipalidad de Santo Domingo
-   Custom CSS sobre Framework Kit Digital (Bootstrap 4)
+   Custom CSS (extensión del Framework Kit Digital gob.cl)
    ============================================ */
 
 /* --- CSS Variables (Design Tokens Kit Digital) --- */
@@ -28,12 +28,10 @@
   --transition: all 0.25s ease;
 }
 
-/* --- Reset & Base --- */
-* { box-sizing: border-box; }
+/* --- Reset & Base (complementa framework gob.cl) --- */
 
 body {
   font-family: 'Roboto', sans-serif;
-  font-size: 1rem;
   color: var(--gob-black);
   background: var(--gob-gray-light);
   line-height: 1.6;
@@ -42,7 +40,6 @@ body {
 
 h1, h2, h3, h4, h5, h6 {
   font-family: 'Roboto Slab', serif;
-  font-weight: 400;
   color: var(--gob-tertiary);
 }
 
@@ -676,11 +673,17 @@ a:hover { color: #005a91; text-decoration: none; }
 .animate-delay-2 { animation-delay: 0.2s; }
 .animate-delay-3 { animation-delay: 0.3s; }
 
-/* --- High Contrast Mode --- */
+/* --- High Contrast Mode (Kit Digital: html.a11y-contrast) --- */
+html.a11y-contrast body,
 body.high-contrast {
   background: #000;
   color: #fff;
 }
+html.a11y-contrast .mosaic-card,
+html.a11y-contrast .stat-card,
+html.a11y-contrast .info-card,
+html.a11y-contrast .table-container,
+html.a11y-contrast .filter-panel,
 body.high-contrast .mosaic-card,
 body.high-contrast .stat-card,
 body.high-contrast .info-card,
@@ -690,5 +693,7 @@ body.high-contrast .filter-panel {
   border-color: #444;
   color: #fff;
 }
+html.a11y-contrast .dynamic-table tbody td,
 body.high-contrast .dynamic-table tbody td { color: #ddd; }
+html.a11y-contrast .header-institucional,
 body.high-contrast .header-institucional { background: #111; }

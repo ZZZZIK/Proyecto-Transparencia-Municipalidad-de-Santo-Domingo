@@ -5,11 +5,12 @@
   <title>Presupuesto Municipal — Municipalidad de Santo Domingo</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Slab:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.digital.gob.cl/framework/css/gob.cl.css">
   <link rel="stylesheet" href="../css/custom.css">
 </head>
 <body>
-  <div class="gob-top-bar"><div class="container d-flex justify-content-between align-items-center"><div class="d-flex align-items-center"><div class="gob-flag"><span class="gob-flag-blue"></span><span class="gob-flag-white"></span><span class="gob-flag-red"></span></div><a href="https://www.gob.cl" target="_blank">Gobierno de Chile</a></div><div class="a11y-bar"><button data-a11y-contrast><span class="material-icons" style="font-size:14px">contrast</span></button><button data-a11y-size="decrease">A-</button><button data-a11y-size="increase">A+</button></div></div></div>
+  <!-- Barra Superior Gobierno (Kit Digital) -->
+  <div class="gob-top-bar"><div class="container d-flex justify-content-between align-items-center"><div class="d-flex align-items-center"><a href="https://www.gob.cl" target="_blank" class="d-flex align-items-center" style="text-decoration:none"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 512 512" fill="white" class="mr-2"><path d="M256 0C114.6 0 0 114.6 0 256s114.6 256 256 256 256-114.6 256-256S397.4 0 256 0zm0 472c-119.3 0-216-96.7-216-216S136.7 40 256 40s216 96.7 216 216-96.7 216-216 216z"/><path d="M256 128l-80 144h160z"/><rect x="216" y="288" width="80" height="64"/></svg><span style="color:rgba(255,255,255,0.85);font-size:0.75rem">Gobierno de Chile</span></a></div><div class="a11y-bar"><button data-a11y-contrast><span class="material-icons" style="font-size:14px">contrast</span></button><button data-a11y-size="decrease">A-</button><button data-a11y-size="increase">A+</button></div></div></div>
   <header class="header-institucional"><div class="container d-flex align-items-center flex-wrap"><div class="logo-container"><img src="../assets/img/logo-municipalidad.png" alt="Escudo"><h1 class="institution-name">Municipalidad de Santo Domingo<small>Portal de Transparencia Activa</small></h1></div></div></header>
   <nav class="nav-main navbar navbar-expand-lg"><div class="container"><button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navMain" style="color:#fff;border-color:rgba(255,255,255,0.3)"><span class="material-icons">menu</span></button><div class="collapse navbar-collapse" id="navMain"><ul class="navbar-nav"><li class="nav-item"><a class="nav-link" href="../index.html"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">home</span> Inicio</a></li><li class="nav-item"><a class="nav-link" href="destino-impuestos.html"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">account_balance_wallet</span> Destino de Impuestos</a></li><li class="nav-item"><a class="nav-link active" href="presupuesto.html"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">pie_chart</span> Presupuesto Municipal</a></li></ul></div></div></nav>
   <div class="breadcrumb-gov"><div class="container"><nav aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../index.html">Inicio</a></li><li class="breadcrumb-item active">Presupuesto Municipal</li></ol></nav></div></div>
@@ -35,8 +36,8 @@
       <div id="tablePresupuesto" class="mt-4"></div>
     </div>
   </main>
-  <footer class="footer-gov"><div class="container"><div class="footer-bottom"><p>© 2026 I. Municipalidad de Santo Domingo</p></div></div></footer>
-  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script><script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script><script src="../js/app.js"></script><script src="../js/tables.js"></script>
+  <footer class="footer-gov"><div class="container"><div class="footer-bottom"><p>© 2026 I. Municipalidad de Santo Domingo<br><a href="https://digital.gob.cl" target="_blank">División de Gobierno Digital</a> · <a href="https://www.gob.cl" target="_blank">Gob.cl</a></p></div></div></footer>
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script><script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script><script src="https://cdn.digital.gob.cl/framework/js/gob.cl.js"></script><script src="../js/app.js"></script><script src="../js/tables.js"></script>
   <script>
   document.addEventListener('DOMContentLoaded', () => {
     const baseItems = [

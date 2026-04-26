@@ -8,19 +8,28 @@ const App = {
   formatCLP: (n) => '$' + new Intl.NumberFormat('es-CL').format(n),
   formatDate: (s) => s ? new Date(s+'T00:00:00').toLocaleDateString('es-CL') : '-',
   
-  // Accessibility
+  // Accessibility (Kit Digital standard classes)
+  _a11yFontLevel: 0, // 0=normal(16px), 1=medium(20px), 2=large(24px)
   initA11y() {
+    const html = document.documentElement;
     document.querySelectorAll('[data-a11y-size]').forEach(btn => {
       btn.addEventListener('click', () => {
         const action = btn.dataset.a11ySize;
-        const html = document.documentElement;
-        const current = parseFloat(getComputedStyle(html).fontSize);
-        if (action === 'increase' && current < 22) html.style.fontSize = (current + 1) + 'px';
-        if (action === 'decrease' && current > 12) html.style.fontSize = (current - 1) + 'px';
+        // Remove current font class
+        html.classList.remove('a11y-font-0', 'a11y-font-1', 'a11y-font-2');
+        if (action === 'increase' && App._a11yFontLevel < 2) App._a11yFontLevel++;
+        if (action === 'decrease' && App._a11yFontLevel > 0) App._a11yFontLevel--;
+        // Apply new font class and size
+        html.classList.add('a11y-font-' + App._a11yFontLevel);
+        const sizes = [16, 20, 24];
+        html.style.fontSize = sizes[App._a11yFontLevel] + 'px';
       });
     });
     document.querySelectorAll('[data-a11y-contrast]').forEach(btn => {
-      btn.addEventListener('click', () => document.body.classList.toggle('high-contrast'));
+      btn.addEventListener('click', () => {
+        html.classList.toggle('a11y-contrast');
+        document.body.classList.toggle('high-contrast'); // backward compat
+      });
     });
   },
 
