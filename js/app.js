@@ -8,27 +8,63 @@ const App = {
   formatCLP: (n) => '$' + new Intl.NumberFormat('es-CL').format(n),
   formatDate: (s) => s ? new Date(s+'T00:00:00').toLocaleDateString('es-CL') : '-',
   
-  // Accessibility (Kit Digital standard classes)
-  _a11yFontLevel: 0, // 0=normal(16px), 1=medium(20px), 2=large(24px)
+  // Accessibility — Floating Widget (estilo municipalidad)
+  _a11yFontLevel: 0,
+  _a11yModes: {},
+
   initA11y() {
     const html = document.documentElement;
-    document.querySelectorAll('[data-a11y-size]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const action = btn.dataset.a11ySize;
-        // Remove current font class
-        html.classList.remove('a11y-font-0', 'a11y-font-1', 'a11y-font-2');
-        if (action === 'increase' && App._a11yFontLevel < 2) App._a11yFontLevel++;
-        if (action === 'decrease' && App._a11yFontLevel > 0) App._a11yFontLevel--;
-        // Apply new font class and size
-        html.classList.add('a11y-font-' + App._a11yFontLevel);
-        const sizes = [16, 20, 24];
-        html.style.fontSize = sizes[App._a11yFontLevel] + 'px';
-      });
+    const panel = document.getElementById('a11yPanel');
+    const fab = document.getElementById('a11yFab');
+    if (!fab || !panel) return;
+
+    // Toggle panel
+    fab.addEventListener('click', (e) => {
+      e.stopPropagation();
+      panel.classList.toggle('open');
     });
-    document.querySelectorAll('[data-a11y-contrast]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    document.addEventListener('click', (e) => {
+      if (!panel.contains(e.target) && !fab.contains(e.target)) {
+        panel.classList.remove('open');
+      }
+    });
+
+    // Action handlers
+    const actions = {
+      'font-increase': () => {
+        if (App._a11yFontLevel < 2) App._a11yFontLevel++;
+        html.style.fontSize = [16, 20, 24][App._a11yFontLevel] + 'px';
+      },
+      'font-decrease': () => {
+        if (App._a11yFontLevel > 0) App._a11yFontLevel--;
+        html.style.fontSize = [16, 20, 24][App._a11yFontLevel] + 'px';
+      },
+      'grayscale': () => html.classList.toggle('a11y-grayscale'),
+      'contrast': () => {
         html.classList.toggle('a11y-contrast');
-        document.body.classList.toggle('high-contrast'); // backward compat
+        document.body.classList.toggle('high-contrast');
+      },
+      'negative': () => html.classList.toggle('a11y-negative'),
+      'light-bg': () => html.classList.toggle('a11y-light-bg'),
+      'underline': () => html.classList.toggle('a11y-underline'),
+      'readable': () => html.classList.toggle('a11y-readable'),
+      'reset': () => {
+        App._a11yFontLevel = 0;
+        html.style.fontSize = '';
+        html.classList.remove('a11y-grayscale','a11y-contrast','a11y-negative','a11y-light-bg','a11y-underline','a11y-readable','a11y-font-0','a11y-font-1','a11y-font-2');
+        document.body.classList.remove('high-contrast');
+        panel.querySelectorAll('button.active').forEach(b => b.classList.remove('active'));
+      }
+    };
+
+    panel.querySelectorAll('[data-a11y-action]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = btn.dataset.a11yAction;
+        if (actions[action]) actions[action]();
+        // Toggle active state (except font and reset)
+        if (!['font-increase','font-decrease','reset'].includes(action)) {
+          btn.classList.toggle('active');
+        }
       });
     });
   },
