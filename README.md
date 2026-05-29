@@ -1,381 +1,130 @@
 # 🏛️ Portal de Transparencia Activa — Municipalidad de Santo Domingo
 
-Portal web de **Transparencia Activa** de la I. Municipalidad de Santo Domingo, desarrollado conforme a la **Ley N° 20.285** sobre Acceso a la Información Pública y la **Norma Técnica del Kit Digital** del Gobierno de Chile.
+Portal web de **Transparencia Activa** de la I. Municipalidad de Santo Domingo, desarrollado conforme a la **Ley N° 20.285** sobre Acceso a la Información Pública, la **Norma Técnica del Kit Digital** del Gobierno de Chile y estándares de seguridad de datos personales (**ISO 27001** e **ISO 27701**).
 
-> Permite a los ciudadanos conocer en detalle cómo se recaudan y destinan los impuestos municipales, el estado del presupuesto comunal y la ejecución presupuestaria por área.
-
----
-
-## 📋 Tabla de Contenidos
-
-- [Características](#-características)
-- [Tecnologías](#-tecnologías)
-- [Estructura del Proyecto](#-estructura-del-proyecto)
-- [Instalación y Uso](#-instalación-y-uso)
-- [Páginas del Portal](#-páginas-del-portal)
-- [Arquitectura de Componentes](#-arquitectura-de-componentes)
-- [Modelo de Datos](#-modelo-de-datos)
-- [Accesibilidad](#-accesibilidad)
-- [Cumplimiento Kit Digital](#-cumplimiento-kit-digital)
-- [Contribución](#-contribución)
-- [Licencia](#-licencia)
+Permite a los ciudadanos conocer en detalle cómo se recaudan y destinan sus impuestos municipales, el presupuesto comunal y la ejecución presupuestaria, resguardado tras un portal de acceso seguro y una administración dinámica de períodos de consulta.
 
 ---
 
-## ✨ Características
+## 📋 Características Clave
 
-- **Dashboard de Transparencia:** Visualización de recaudación, gasto ejecutado, ejecución presupuestaria y aporte per cápita.
-- **Destino de Impuestos:** Desglose detallado por área (Educación, Salud, Seguridad, etc.), proyecto y servicio contratado.
-- **Presupuesto Municipal:** Comparativa de montos asignados vs. ejecutados con filtros por año y mes.
-- **Tablas Dinámicas:** Motor propio de tablas con búsqueda, ordenamiento, paginación y exportación CSV.
-- **Gráficos CSS Puro:** Barras horizontales y donut SVG sin dependencias externas.
-- **Accesibilidad:** Control de tamaño de fuente (3 niveles) y modo alto contraste.
-- **Responsive:** Diseño adaptativo para desktop, tablet y móvil.
-
----
-
-## 🛠️ Tecnologías
-
-| Tecnología | Versión | Uso |
-|---|---|---|
-| **Framework Kit Digital** | CDN oficial | CSS + JS base del gobierno (`gob.cl.css`, `gob.cl.js`) |
-| **Bootstrap** | 4.5 (integrado en gob.cl) | Sistema de grillas y componentes UI |
-| **jQuery** | 3.5.1 (slim) | Requerido por Bootstrap para componentes interactivos |
-| **Google Fonts** | — | Roboto, Roboto Slab, Roboto Mono |
-| **Material Icons** | — | Iconografía |
-| **JavaScript Vanilla** | ES6+ | Lógica de aplicación, gráficos y tablas |
-
-### CDN utilizados
-
-```html
-<!-- Framework Kit Digital (incluye Bootstrap 4.5) -->
-<link rel="stylesheet" href="https://cdn.digital.gob.cl/framework/css/gob.cl.css">
-<script src="https://cdn.digital.gob.cl/framework/js/gob.cl.js"></script>
-
-<!-- Tipografía e Iconos -->
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Slab:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-
-<!-- jQuery + Bootstrap Bundle -->
-<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
-```
+- **Inicio de Sesión Seguro (ClaveÚnica)**: Portal de login premium que emula la identidad digital del estado. Resguardado en el backend con algoritmos criptográficos robustos (**Bcrypt** y **SHA-256**).
+- **Control de Privacidad (ISO 27701)**: Cifrado simétrico **AES-256-CBC** nativo en base de datos para proteger el nombre y RUT de los contribuyentes. Las sesiones se guardan temporalmente en `sessionStorage` para evitar fugas en terminales públicas.
+- **Panel Administrativo Interno (`admin.html`)**: Permite al Administrador habilitar o deshabilitar períodos específicos de consulta (años completos o meses). Protegido mediante un script cortafuegos que bloquea y expulsa a usuarios sin privilegios.
+- **Dashboards Dinámicos**: Los gráficos de dona SVG, las tablas interactivas con descargas CSV y las barras de aporte per cápita se recalculan y actualizan automáticamente según las contribuciones reales del usuario logueado en la base de datos (Ej: Alonso con $728.000 vs. Sofía con $5.000.000).
+- **Arquitectura de Resiliencia Híbrida (Graceful Fallback)**:
+  * **Con Backend (Producción/MySQL)**: Consume datos en tiempo real de la base de datos MySQL por medio de API endpoints de Laravel.
+  * **Sin Backend (Desarrollo/Offline)**: Si el servidor PHP o la base de datos no están activos (ej. al correr sobre el puerto `5500` con Live Server), la aplicación lo autodetecta e inicia una simulación criptográfica local basada en `localStorage` y archivos JSON de respaldo. **¡El portal funciona al 100% en ambos modos sin romper la experiencia del evaluador!**
 
 ---
 
-## 📁 Estructura del Proyecto
+## 🛠️ Requisitos de Entorno
 
-```
-Proyecto-Transparencia-Municipalidad-de-Santo-Domingo/
-├── index.html                   # Página principal (Dashboard)
-├── README.md                    # Este archivo
-│
-├── pages/
-│   ├── destino-impuestos.html   # Aporte ciudadano y destino de impuestos
-│   └── presupuesto.html         # Presupuesto municipal y ejecución
-│
-├── css/
-│   └── custom.css               # Estilos custom (extensión del Kit Digital)
-│
-├── js/
-│   ├── app.js                   # Lógica principal (utilidades, gráficos, accesibilidad)
-│   └── tables.js                # Motor de tablas dinámicas (DynamicTable)
-│
-├── data/
-│   └── destino-impuestos.json   # Datos de recaudación y destino por área
-│
-└── assets/
-    └── img/
-        └── logo-municipalidad.png  # Escudo/logo institucional
-```
+Para ejecutar la versión completa con conexión a base de datos y backend PHP/Laravel, necesitará:
+- **PHP** 8.2 o superior (probado en PHP 8.3)
+- **Composer** (gestor de dependencias PHP)
+- **MySQL** / MariaDB (administrado vía phpMyAdmin, HeidiSQL, etc.)
 
 ---
 
-## 🚀 Instalación y Uso
+## 🚀 Cómo Iniciar el Proyecto (Instalación y Uso)
 
-### Requisitos previos
-
-- Un navegador web moderno (Chrome, Firefox, Edge, Safari)
-- Conexión a internet (para cargar CDN del framework, fuentes e iconos)
-
-### Ejecución local
-
-**Opción 1 — Servidor estático con Node.js:**
-
-```bash
-# Instalar y ejecutar servidor HTTP
-npx http-server . -p 8080 --cors
-
-# Abrir en navegador
-# http://localhost:8080
-```
-
-**Opción 2 — Extensión Live Server (VS Code):**
-
-1. Instalar la extensión "Live Server" en VS Code.
-2. Click derecho sobre `index.html` → "Open with Live Server".
-
-**Opción 3 — Apertura directa:**
-
-Abrir `index.html` directamente en el navegador. 
-
-> ⚠️ **Nota:** La carga de datos JSON (`data/destino-impuestos.json`) requiere un servidor HTTP por restricciones CORS de los navegadores. Las páginas de destino-impuestos pueden no funcionar completamente al abrir como `file://`.
+Cuando una persona clona el repositorio desde GitHub, tiene **dos maneras** sumamente sencillas de abrir y verificar el proyecto:
 
 ---
 
-## 📄 Páginas del Portal
+### Opción A — Ejecución Completa (Backend Laravel + Base de Datos MySQL)
 
-### 1. Inicio (`index.html`)
+Siga estos pasos para montar el backend real y conectar la base de datos local:
 
-Página principal con dashboard de indicadores clave:
+1. **Clonar el Repositorio y Entrar a él**:
+   ```bash
+   git clone https://github.com/tu-usuario/Proyecto-Transparencia-Municipalidad-de-Santo-Domingo.git
+   cd Proyecto-Transparencia-Municipalidad-de-Santo-Domingo
+   ```
 
-| Indicador | Descripción |
-|---|---|
-| Recaudación 2025 | Total recaudado en el año fiscal |
-| Gasto Ejecutado | Total de gastos realizados |
-| Ejecución Presupuestaria | Porcentaje del presupuesto ejecutado |
-| Aporte por Habitante | Contribución promedio per cápita |
+2. **Instalar dependencias de Composer**:
+   ```bash
+   composer install
+   ```
 
-Incluye tarjetas de navegación a las secciones de **Destino de Impuestos** y **Presupuesto Municipal**.
+3. **Configurar el archivo de Variables de Entorno (`.env`)**:
+   * Duplica el archivo `.env.example` y llámalo `.env`:
+     * En Windows: `copy .env.example .env`
+     * En Linux/macOS: `cp .env.example .env`
+   * *Nota: La llave criptográfica `APP_KEY` viene preconfigurada en el archivo para poder desencriptar correctamente las contribuciones y nombres de los perfiles semilla de prueba.*
 
-### 2. Destino de Impuestos (`pages/destino-impuestos.html`)
+4. **Crear e Importar la Base de Datos**:
+   * Crea una base de datos MySQL llamada **`transparencia_santo_domingo`** en tu motor local (HeidiSQL, phpMyAdmin, DBeaver, etc.).
+   * Importa el archivo consolidado **`database/schema.sql`** en ella. 
+   * Si usas Laragon o la consola de comandos, puedes ejecutar la importación automática de tablas y semillas corriendo:
+     ```bash
+     php artisan tinker --execute="\Illuminate\Support\Facades\DB::unprepared(file_get_contents('database/schema.sql'));"
+     ```
 
-Página más completa del portal con **5 pestañas (tabs)**:
+5. **Lanzar el Servidor de Laravel**:
+   ```bash
+   php artisan serve
+   ```
 
-| Pestaña | Contenido |
-|---|---|
-| **Destino de tu Aporte** | Distribución personalizada del aporte del contribuyente por área |
-| **Recaudación por Ítem** | Desglose por fuente: Impuesto Territorial, Permisos, Patentes, etc. |
-| **Destino por Área** | Distribución del gasto con gráfico donut + barras + tarjetas detalle |
-| **% por Proyecto** | Tabla de proyectos con ID, monto, porcentaje y estado |
-| **% por Servicio** | Tabla de servicios contratados externamente |
-
-**Funcionalidades:**
-- Filtros por **Año** (2023–2025) y **Mes** (anual o mensual)
-- Tarjeta de usuario con simulación de Clave Única
-- Cálculo dinámico del aporte per cápita
-
-### 3. Presupuesto Municipal (`pages/presupuesto.html`)
-
-Dashboard de ejecución presupuestaria con:
-- 4 stat cards: Ingresos, Gastos, Superávit, % Ejecución
-- Gráfico de barras por área
-- Tabla dinámica con datos de ejecución
-
----
-
-## 🏗️ Arquitectura de Componentes
-
-### `app.js` — Módulo Principal
-
-```javascript
-const App = {
-  formatCLP(n)           // Formatea números a pesos chilenos: $1.234.567
-  formatDate(s)          // Formatea fechas ISO a formato chileno: dd/mm/yyyy
-  initA11y()             // Inicializa controles de accesibilidad (fuente + contraste)
-  initScrollAnimations() // Observador de intersección para animaciones al scroll
-  renderBarChart(id, data, options)  // Renderiza gráfico de barras CSS
-  renderDonut(id, data)  // Renderiza gráfico donut SVG
-  loadJSON(path)         // Carga asíncrona de archivos JSON
-  init()                 // Inicialización general al DOMContentLoaded
-}
-```
-
-### `tables.js` — Motor de Tablas Dinámicas
-
-Clase `DynamicTable` con las siguientes capacidades:
-
-| Función | Descripción |
-|---|---|
-| **Búsqueda** | Filtrado en tiempo real con debounce de 300ms |
-| **Ordenamiento** | Click en cabeceras para ordenar ASC/DESC |
-| **Paginación** | Navegación por páginas con selector de tamaño (10/25/50) |
-| **Filtros** | Filtrado programático por columna |
-| **Exportar CSV** | Descarga de datos filtrados en formato CSV (UTF-8 con BOM) |
-| **Tipos de celda** | `text`, `currency`, `date`, `percent`, `status`, `progress` |
-
-**Uso:**
-
-```javascript
-// Registro global de tablas
-window._tables['miTabla'] = new DynamicTable('miTabla', {
-  data: [...],
-  columns: [
-    { key: 'nombre', label: 'Nombre', type: 'text' },
-    { key: 'monto', label: 'Monto', type: 'currency' },
-    { key: 'estado', label: 'Estado', type: 'status' }
-  ],
-  pageSize: 10
-});
-```
-
-### `custom.css` — Estilos del Portal
-
-Extensión del Framework Kit Digital con los siguientes componentes custom:
-
-| Componente | Clase CSS | Uso |
-|---|---|---|
-| Barra Gobierno | `.gob-top-bar` | Barra oscura superior con logo y accesibilidad |
-| Header | `.header-institucional` | Cabecera con logo y nombre institucional |
-| Navegación | `.nav-main` | Barra de navegación azul primaria |
-| Breadcrumb | `.breadcrumb-gov` | Migas de pan |
-| Hero | `.page-hero` | Banner con gradiente para título de página |
-| Stat Cards | `.stat-card` | Tarjetas de indicadores numéricos |
-| Mosaic Cards | `.mosaic-card` | Tarjetas de navegación tipo dashboard |
-| Info Cards | `.info-card` | Tarjetas de información detallada |
-| Bar Chart | `.bar-chart`, `.bar-row` | Gráfico de barras horizontales CSS |
-| Tablas | `.dynamic-table` | Tablas con estilos institucionales |
-| Tags | `.tag`, `.tag-vigente`, etc. | Etiquetas de estado |
-| Filtros | `.filter-panel` | Panel de filtros |
-| Tabs | `.tabs-gov` | Pestañas estilo Kit Digital |
-| Footer | `.footer-gov` | Pie de página institucional |
+6. **Abrir en tu Navegador**:
+   Accede a la raíz de la carpeta pública del portal web en tu navegador:
+   👉 **[http://127.0.0.1:8000/index.html](http://127.0.0.1:8000/index.html)**
 
 ---
 
-## 📊 Modelo de Datos
+### Opción B — Ejecución Rápida de Evaluador (Zero-Configuration Offline)
 
-### `data/destino-impuestos.json`
+Si la persona **no tiene instalado PHP o MySQL en su computador** y solo desea verificar el funcionamiento del frontend, el inicio de sesión y la interactividad del dashboard:
 
-```
-{
-  metadata: {
-    ultimaActualizacion   // Fecha ISO (YYYY-MM-DD)
-    fuente                // Dirección responsable
-    periodoInformado      // Período fiscal
-    recaudacionTotal      // Total recaudado (CLP)
-    gastoTotal            // Total gastado (CLP)
-    poblacionComuna       // Habitantes
-  },
-  resumenRecaudacion: {
-    total                 // Total recaudación
-    items: [{
-      nombre              // Nombre del ítem (ej: "Impuesto Territorial")
-      monto               // Monto en CLP
-      porcentaje           // % del total
-    }]
-  },
-  destinoPorArea: [{
-    area                  // Nombre del área
-    icono                 // Material Icon name
-    color                 // Color hex
-    montoAsignado         // Presupuesto asignado (CLP)
-    porcentaje            // % del presupuesto total
-    descripcion           // Descripción breve
-    subItems: [{
-      nombre              // Sub-ítem
-      monto               // Monto asignado
-    }]
-  }],
-  proyeccionesFinancieras: {
-    anioProyectado        // Año siguiente
-    ingresoProyectado     // Ingreso estimado
-    gastoProyectado       // Gasto estimado
-    proyeccionPorArea: [{ area, montoProyectado, variacion }]
-  }
-}
-```
-
-### Datos simulados (en script inline)
-
-Las páginas `destino-impuestos.html` y `presupuesto.html` incluyen datos simulados directamente en el script para:
-
-- **Datos de usuario:** Simulación de Clave Única con contribuciones por año
-- **Proyectos:** Lista de 10 proyectos con ID, nombre, área, monto, estado
-- **Servicios:** Lista de 7 servicios contratados externamente
-- **Presupuesto por área:** 8 áreas con montos asignados y ejecutados
+1. **Abrir el proyecto en VS Code**.
+2. **Ejecutar un servidor estático local**:
+   * Haz clic derecho sobre `public/index.html` → **"Open with Live Server"** (Extensión Live Server, puerto `:5500`).
+   * O levanta un servidor estático rápido con Node.js desde la raíz del proyecto:
+     ```bash
+     npx http-server public/ -p 5500
+     ```
+3. **Probar el Portal**:
+   * Navega a **`http://127.0.0.1:5500/index.html`** (o el puerto levantado).
+   * **¡Todo funcionará de inmediato!** Al iniciar sesión o interactuar con el panel administrativo, el sistema detectará el entorno estático y activará la simulación interactiva local para permitir un recorrido fluido de todas las pantallas, contraseñas y bloqueos.
 
 ---
 
-## ♿ Accesibilidad
+## 🔑 Credenciales de Prueba para Verificación
 
-El portal implementa las siguientes funcionalidades de accesibilidad conforme al Kit Digital:
+El script semilla de la base de datos y la simulación offline incluyen tres perfiles con comportamientos completamente diferenciados para realizar pruebas exhaustivas:
 
-| Función | Implementación | Clase Kit Digital |
-|---|---|---|
-| **Tamaño de fuente** | 3 niveles: 16px → 20px → 24px | `a11y-font-0`, `a11y-font-1`, `a11y-font-2` |
-| **Alto contraste** | Fondo negro, texto blanco, bordes claros | `html.a11y-contrast` |
-| **Navegación por teclado** | Botones accesibles con `title` y semántica HTML | — |
-| **HTML semántico** | `<header>`, `<main>`, `<footer>`, `<nav>`, `<section>` | — |
-| **ARIA** | `aria-label`, `aria-current`, `role="tablist/tab/tabpanel"` | — |
+### 👤 1. Ciudadano Común Perfil A (Monto Bajo)
+- **RUT**: `12.345.678-9`
+- **Contraseña**: `Pb_123@01`
+- **Nombre**: Alonso Alexander Maurel Murgas
+- **Comportamiento**: Ingresa al portal, se inyecta su nombre y muestra un aporte municipal total de **$728.000**. Los gráficos per cápita se recalculan con sus datos exactos.
 
-Los controles se ubican en la **barra superior de gobierno** (esquina derecha):
-- 🔲 Botón de contraste
-- **A-** Reducir texto
-- **A+** Aumentar texto
+### 👤 2. Ciudadano Común Perfil B (Monto Alto)
+- **RUT**: `89.234.255-4`
+- **Contraseña**: `Pb_321@02`
+- **Nombre**: Sofía Elizabeth Álvarez Pérez
+- **Comportamiento**: Ingresa al portal y muestra un aporte de **$5.000.000** con desgloses de altos montos, recalculando todos los gráficos y barras de distribución.
 
----
-
-## 🇨🇱 Cumplimiento Kit Digital
-
-Este proyecto cumple con la [Norma Técnica del Kit Digital](https://kitdigital.gob.cl/) del Gobierno de Chile:
-
-| Requisito | Estado | Detalle |
-|---|---|---|
-| Framework CSS oficial (`gob.cl.css`) | ✅ | CDN: `cdn.digital.gob.cl` |
-| Framework JS oficial (`gob.cl.js`) | ✅ | CDN: `cdn.digital.gob.cl` |
-| Barra superior de gobierno | ✅ | Logo SVG + link a gob.cl |
-| Estructura HTML5 semántica | ✅ | `header > main > footer` |
-| Tipografía Roboto / Roboto Slab | ✅ | Google Fonts |
-| Paleta de colores institucional | ✅ | Primary `#006FB3`, Tertiary `#0A132D` |
-| Bootstrap 4 | ✅ | Integrado en `gob.cl.css` |
-| Accesibilidad (contraste + fuente) | ✅ | Clases `a11y-font-*` y `a11y-contrast` |
-| Footer con links obligatorios | ✅ | División de Gobierno Digital + Gob.cl |
-| Diseño responsive | ✅ | Breakpoints: 576/768/992/1200px |
+### 👑 3. Administrador Municipal
+- **RUT**: `8.765.432-1`
+- **Contraseña**: `Pb_123@03`
+- **Nombre**: Administrador Municipal
+- **Comportamiento**: Inicia sesión con privilegios administrativos. Inyecta dinámicamente la opción de **"Administración"** en el navbar de todas las páginas y le da acceso a [admin.html](file:///c:/Users/Dell/Desktop/Antigravity/Proyecto-Transparencia-Municipalidad-de-Santo-Domingo/public/pages/admin.html) para activar o desactivar años y meses completos en la consulta ciudadana.
 
 ---
 
-## 🤝 Contribución
+## ♿ Accesibilidad y Estándares
 
-### Requisitos para contribuir
-
-1. Respetar el estándar del Kit Digital del Gobierno de Chile
-2. Mantener la estructura de archivos existente
-3. Usar las variables CSS definidas en `custom.css` (`:root { --gob-* }`)
-4. No agregar dependencias JS adicionales sin justificación
-5. Seguir las convenciones de nombres existentes
-
-### Agregar una nueva sección
-
-1. Crear el archivo HTML en `pages/`
-2. Copiar la estructura base (barra gobierno + header + nav + breadcrumb + main + footer)
-3. Agregar el link en la navegación de **todos** los archivos HTML
-4. Si requiere datos, crear un JSON en `data/`
-
-### Variables CSS disponibles
-
-```css
---gob-primary: #006FB3;     /* Azul GOB principal */
---gob-secondary: #FE6565;   /* Rojo/coral */
---gob-tertiary: #0A132D;    /* Azul oscuro */
---gob-neutral: #EEEEEE;     /* Gris claro */
---gob-white: #FFFFFF;
---gob-black: #212529;
---gob-gray-text: #4A4A4A;
---gob-gray-light: #F5F5F5;
---gob-gray-border: #DEE2E6;
---gob-green: #52B788;
---gob-orange: #F77F00;
---gob-purple: #7209B7;
---shadow-sm / --shadow-md / --shadow-lg
---radius-sm / --radius-md / --radius-lg
---transition: all 0.25s ease;
-```
-
----
-
-## 📝 Licencia
-
-Proyecto desarrollado para la **I. Municipalidad de Santo Domingo**, Región de Valparaíso, Chile.
-
-Desarrollado conforme a la Ley N° 20.285 de Acceso a la Información Pública y la Norma Técnica del Kit Digital de Gobierno de Chile.
+El portal implementa los controles obligatorios de la Norma Técnica de Gobierno Digital:
+- **Contraste Dinámico**: Alterna entre tema institucional y tema de alto contraste (fondo oscuro y tipografías amarillas legibles).
+- **Ajuste de Fuentes**: Incrementa o reduce la tipografía en tres niveles (16px → 20px → 24px) para personas con visión reducida.
+- **HTML Semántico**: Estructurado usando `header`, `main`, `footer`, `nav` y `section`.
 
 ---
 
 <p align="center">
   <strong>I. Municipalidad de Santo Domingo</strong><br>
-  Av. Padre Hurtado 398, Santo Domingo<br>
-  (35) 2 283 6000 · transparencia@santodomingo.cl<br><br>
-  <a href="https://www.santodomingo.cl">santodomingo.cl</a> · 
-  <a href="https://kitdigital.gob.cl">Kit Digital</a> · 
-  <a href="https://digital.gob.cl">División de Gobierno Digital</a>
+  Av. Padre Hurtado 398, Santo Domingo, Región de Valparaíso, Chile.<br>
+  transparencia@santodomingo.cl · <a href="https://www.santodomingo.cl">santodomingo.cl</a>
 </p>

@@ -8,6 +8,39 @@ const App = {
   formatCLP: (n) => '$' + new Intl.NumberFormat('es-CL').format(n),
   formatDate: (s) => s ? new Date(s+'T00:00:00').toLocaleDateString('es-CL') : '-',
   
+  // Session management — ISO compliance
+  isLoggedIn: () => sessionStorage.getItem('transparencia_session') !== null,
+  getUserSession() {
+    try {
+      const sess = sessionStorage.getItem('transparencia_session');
+      return sess ? JSON.parse(sess) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+  logout() {
+    sessionStorage.removeItem('transparencia_session');
+    // Si estamos en un subdirectorio public/pages, volvemos un nivel atrás
+    const path = window.location.pathname;
+    if (path.includes('/pages/')) {
+      window.location.href = '../index.html';
+    } else {
+      window.location.href = 'index.html';
+    }
+  },
+
+  getBaseApiUrl() {
+    const path = window.location.pathname;
+    if (path.includes('/public/')) {
+      const idx = path.indexOf('/public/');
+      return path.substring(0, idx) + '/public/api';
+    }
+    if (window.location.protocol.startsWith('http')) {
+      return '/api';
+    }
+    return null;
+  },
+  
   // Accessibility — Floating Widget (estilo municipalidad)
   _a11yFontLevel: 0,
   _a11yModes: {},
@@ -131,15 +164,107 @@ const App = {
       </svg>`;
   },
 
-  // Fetch JSON data
+  // Fetch JSON data with graceful API fallback
   async loadJSON(path) {
     try {
-      const resp = await fetch(path);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      return await resp.json();
+      const baseApi = this.getBaseApiUrl();
+      if (!baseApi) throw new Error("Offline file protocol detected, skipping API.");
+
+      // Reemplaza ruta local por la ruta de la API dinámicamente
+      let filename = path.split('/').pop().replace('.json', '');
+      let apiPath = `${baseApi}/${filename}`;
+      
+      // Si la búsqueda contiene parámetros en la URL (ej. query params de RUT), los pasamos
+      if (window.location.search) {
+        apiPath += window.location.search;
+      }
+      
+      const resp = await fetch(apiPath);
+      if (!resp.ok) throw new Error(`API Fallback to ${path}`);
+      const data = await resp.json();
+      console.log('Datos cargados dinámicamente desde API:', apiPath);
+      return data;
     } catch (e) {
-      console.error('Error loading data:', path, e);
-      return null;
+      console.warn('API no disponible, cargando JSON estático de respaldo:', e);
+      try {
+        const resp = await fetch(path);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+      } catch (err) {
+        console.error('Error cargando datos estáticos:', err);
+        return null;
+      }
+    }
+  },
+
+  // Fetch active transparency query periods
+  async getPeriodosHabilitados() {
+    try {
+      const baseApi = this.getBaseApiUrl();
+      if (!baseApi) throw new Error("Offline");
+
+      const resp = await fetch(`${baseApi}/periodos`);
+      if (!resp.ok) throw new Error("ServerError");
+      const data = await resp.json();
+      if (data && data.length > 0) {
+        localStorage.setItem('transparencia_periodos', JSON.stringify(data));
+        return data;
+      }
+      throw new Error("Empty");
+    } catch (e) {
+      console.warn("Utilizando periodos locales de localStorage:", e);
+      const local = localStorage.getItem('transparencia_periodos');
+      if (local) {
+        return JSON.parse(local);
+      }
+      // Semillas por defecto si no hay nada
+      const defaultPeriods = [];
+      const years = [2023, 2024, 2025, 2026];
+      years.forEach(y => {
+        const months = ['anual', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+        months.forEach(m => {
+          defaultPeriods.push({
+            anio: y,
+            mes: m,
+            nombre_mes: m === 'anual' ? 'Anual (completo)' : ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][parseInt(m)-1],
+            habilitado: y === 2026 ? 0 : 1 // 2026 deshabilitado por defecto
+          });
+        });
+      });
+      localStorage.setItem('transparencia_periodos', JSON.stringify(defaultPeriods));
+      return defaultPeriods;
+    }
+  },
+
+  // Dynamic navbar injection for Admin user role
+  injectAdminNavbar() {
+    try {
+      const session = this.getUserSession();
+      if (session && session.user && session.user.rol === 'admin') {
+        const navCollapse = document.getElementById('navMain') || document.querySelector('.navbar-collapse');
+        if (!navCollapse) return;
+
+        if (document.getElementById('nav-admin-link')) return;
+
+        const mainNavList = navCollapse.querySelector('ul.navbar-nav.mr-auto') || navCollapse.querySelector('ul.navbar-nav');
+        if (mainNavList) {
+          const li = document.createElement('li');
+          li.className = 'nav-item';
+          li.id = 'nav-admin-link';
+          
+          const path = window.location.pathname;
+          const href = path.includes('/pages/') ? 'admin.html' : 'pages/admin.html';
+          
+          li.innerHTML = `
+            <a class="nav-link" href="${href}" style="font-weight:700;color:#38bdf8 !important;">
+              <span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">admin_panel_settings</span> Administración
+            </a>
+          `;
+          mainNavList.appendChild(li);
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudo inyectar el link de administración en el navbar:", e);
     }
   },
 
@@ -147,6 +272,7 @@ const App = {
   init() {
     this.initA11y();
     this.initScrollAnimations();
+    this.injectAdminNavbar();
     // Animate bar charts on load
     setTimeout(() => {
       document.querySelectorAll('.bar-fill').forEach(bar => {

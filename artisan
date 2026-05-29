@@ -1,0 +1,48 @@
+#!/usr/bin/env php
+<?php
+
+define('LARAVEL_START', microtime(true));
+
+/*
+|--------------------------------------------------------------------------
+| Cargar el Autocargador (Autoloader)
+|--------------------------------------------------------------------------
+|
+| Composer proporciona un cargador de clases optimizado de forma automática.
+| Requerimos este archivo para poder instanciar las clases del framework.
+|
+*/
+
+require __DIR__.'/vendor/autoload.php';
+
+/*
+|--------------------------------------------------------------------------
+| Arrancar la Aplicación
+|--------------------------------------------------------------------------
+|
+| Obtenemos la instancia de la aplicación desde bootstrap/app.php y
+| ejecutamos el Kernel de Consola para procesar el comando solicitado.
+|
+*/
+
+$app = require_once __DIR__.'/bootstrap/app.php';
+
+$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+
+$status = $kernel->handle(
+    $input = new Symfony\Component\Console\Input\ArgvInput,
+    new Symfony\Component\Console\Output\ConsoleOutput
+);
+
+/*
+|--------------------------------------------------------------------------
+| Finalizar la Aplicación
+|--------------------------------------------------------------------------
+|
+| Liberamos recursos y finalizamos el ciclo de vida del comando.
+|
+*/
+
+$kernel->terminate($input, $status);
+
+exit($status);

@@ -34,10 +34,13 @@
     <div class="container">
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navMain" style="color:#fff;border-color:rgba(255,255,255,0.3)"><span class="material-icons">menu</span></button>
       <div class="collapse navbar-collapse" id="navMain">
-        <ul class="navbar-nav">
+        <ul class="navbar-nav mr-auto">
           <li class="nav-item"><a class="nav-link" href="../index.html"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">home</span> Inicio</a></li>
           <li class="nav-item"><a class="nav-link active" href="destino-impuestos.html"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">account_balance_wallet</span> Destino de Impuestos</a></li>
           <li class="nav-item"><a class="nav-link" href="presupuesto.html"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">pie_chart</span> Presupuesto Municipal</a></li>
+        </ul>
+        <ul class="navbar-nav">
+          <li class="nav-item"><a class="nav-link" href="#" onclick="App.logout()" style="color:#ffb703;font-weight:700"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">logout</span> Cerrar Sesión</a></li>
         </ul>
       </div>
     </div>
@@ -69,12 +72,27 @@
       <div class="filter-panel" style="margin-top:-15px;position:relative;z-index:2">
         <div class="row align-items-end">
           <div class="col-md-3"><label>Año:</label>
-            <select class="form-control form-control-sm" id="filterAnio"><option value="2025" selected>2025</option><option value="2024">2024</option><option value="2023">2023</option></select>
+            <select class="form-control form-control-sm" id="filterAnio">
+              <option value="2026">2026</option>
+              <option value="2025" selected>2025</option>
+              <option value="2024">2024</option>
+              <option value="2023">2023</option>
+            </select>
           </div>
           <div class="col-md-3"><label>Mes:</label>
             <select class="form-control form-control-sm" id="filterMes"><option value="anual" selected>Anual (completo)</option><option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option><option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option></select>
           </div>
           <div class="col-md-6 text-right" style="font-size:.8rem;color:var(--gob-gray-text);padding-top:20px"><span class="material-icons mr-1" style="font-size:14px;vertical-align:middle">info</span> Seleccione período para actualizar todos los datos</div>
+        </div>
+      </div>
+
+      <!-- Alerta de Período Deshabilitado -->
+      <div id="periodDisabledAlert" class="alert alert-warning mt-3" style="display:none;border-left:4px solid #f59e0b;padding:15px;border-radius:6px;background-color:#fffbeb">
+        <div class="d-flex align-items-center">
+          <span class="material-icons mr-2 text-warning" style="font-size:24px">warning</span>
+          <div style="color:#78350f;font-size:0.9rem">
+            <strong>Período no disponible:</strong> Este período de consulta está desactivado temporalmente para ciudadanos normales por encontrarse en fase de auditoría o carga interna de datos.
+          </div>
         </div>
       </div>
 
@@ -206,23 +224,124 @@
   <script src="../js/tables.js"></script>
   <script>
   document.addEventListener('DOMContentLoaded', async () => {
+    // === Control de Acceso y Sesión (ISO 27701) ===
+    if (!App.isLoggedIn()) {
+      console.warn("Acceso denegado: redirección a login.html");
+      window.location.href = 'login.html?redirect=destino-impuestos.html';
+      return;
+    }
+
+    const session = App.getUserSession();
+    const activeUser = session.user;
+
+    // Obtener períodos de consulta habilitados
+    const allPeriods = await App.getPeriodosHabilitados();
+
     const data = await App.loadJSON('../data/destino-impuestos.json');
     if (!data) return;
+    
+    // Inyectar datos del ciudadano activo logueado en la estructura del dashboard
+    data.contribuyenteInfo = activeUser;
+
     const poblacion = data.metadata.poblacionComuna || 9800;
     const colors = ['#2E86AB','#E8433E','#F77F00','#52B788','#7209B7','#1B4332','#E09F3E','#6C757D'];
     const fmt = v => '$'+new Intl.NumberFormat('es-CL').format(v);
 
     // Simulated user tax data by year (Clave Única future integration)
     const userData = {
+      '2026':{contrib:0,circ:0,aseo:0,monthly:[0,0,0,0,0,0,0,0,0,0,0,0]},
       '2025':{contrib:485000,circ:165000,aseo:78000,monthly:[58000,58000,62000,60000,65000,60000,62000,63000,58000,62000,60000,60000]},
       '2024':{contrib:460000,circ:155000,aseo:72000,monthly:[55000,55000,58000,57000,60000,57000,58000,59000,55000,58000,57000,58000]},
       '2023':{contrib:430000,circ:145000,aseo:65000,monthly:[50000,50000,55000,52000,56000,53000,54000,55000,50000,54000,53000,52000]}
     };
+
+    // Cargar información del contribuyente desde la sesión de la API
+    if (data.contribuyenteInfo) {
+      document.getElementById('userName').textContent = data.contribuyenteInfo.nombre;
+      userData['2025'] = {
+        contrib: data.contribuyenteInfo.detalles.contribucion,
+        circ: data.contribuyenteInfo.detalles.circulacion,
+        aseo: data.contribuyenteInfo.detalles.aseo,
+        monthly: data.contribuyenteInfo.mensual
+      };
+      
+      // Si el contribuyente tiene datos para otros años, se pueden poblar aquí.
+      // Para pruebas del admin en 2026, asumiremos montos simulados proporcionales si el admin lo habilita:
+      userData['2026'] = {
+        contrib: Math.round(data.contribuyenteInfo.detalles.contribucion * 1.05),
+        circ: Math.round(data.contribuyenteInfo.detalles.circulacion * 1.05),
+        aseo: Math.round(data.contribuyenteInfo.detalles.aseo * 1.05),
+        monthly: data.contribuyenteInfo.mensual.map(m => Math.round(m * 1.05))
+      };
+    }
+
     const areas = data.destinoPorArea;
 
+    // Helper para deshabilitar opciones de períodos no habilitados
+    function updateDropdownsDisabledState() {
+      const selectAnio = document.getElementById('filterAnio');
+      const selectMes = document.getElementById('filterMes');
+      const selectedYear = selectAnio.value;
+
+      // Deshabilitar años si todos sus períodos están desactivados
+      Array.from(selectAnio.options).forEach(opt => {
+        const yearVal = opt.value;
+        const periodsForYear = allPeriods.filter(p => p.anio == yearVal);
+        const isAnyEnabled = periodsForYear.some(p => p.habilitado == 1);
+        opt.disabled = !isAnyEnabled;
+        if (!isAnyEnabled) {
+          opt.text = `${yearVal} (No Habilitado)`;
+        } else {
+          opt.text = yearVal;
+        }
+      });
+
+      // Deshabilitar meses del año seleccionado si no están habilitados
+      Array.from(selectMes.options).forEach(opt => {
+        const monthVal = opt.value;
+        const periodObj = allPeriods.find(p => p.anio == selectedYear && p.mes === monthVal);
+        const isEnabled = periodObj ? periodObj.habilitado == 1 : true;
+        opt.disabled = !isEnabled;
+        
+        const cleanText = opt.text.replace(' (No disponible)', '');
+        if (!isEnabled) {
+          opt.text = `${cleanText} (No disponible)`;
+        } else {
+          opt.text = cleanText;
+        }
+      });
+    }
+
     function updateAll() {
+      updateDropdownsDisabledState();
+
       const anio = document.getElementById('filterAnio').value;
       const mes = document.getElementById('filterMes').value;
+
+      // Verificar si el período seleccionado está habilitado
+      const periodObj = allPeriods.find(p => p.anio == anio && p.mes === mes);
+      const isHabilitado = periodObj ? periodObj.habilitado == 1 : true;
+
+      const alertBox = document.getElementById('periodDisabledAlert');
+
+      if (!isHabilitado) {
+        alertBox.style.display = 'block';
+        document.getElementById('labelAnio').textContent = anio + ' (No Disponible)';
+        document.getElementById('userTotal').textContent = fmt(0);
+        document.getElementById('statPromedio').textContent = fmt(0);
+        document.getElementById('statPromedioMes').textContent = 'período seleccionado';
+        document.getElementById('labelUserTotal2').textContent = fmt(0);
+        document.getElementById('chartAportePerCapita').innerHTML = `
+          <div class="text-center text-muted py-5" style="border:2px dashed var(--gob-gray-border);border-radius:8px;background:#f8fafc">
+            <span class="material-icons text-warning mb-2" style="font-size:2rem">lock</span>
+            <p style="font-size:0.95rem;margin:0"><strong>Este período de consulta se encuentra temporalmente suspendido.</strong><br>La información municipal de este período está en proceso de carga o auditoría financiera.</p>
+          </div>`;
+        document.getElementById('cardsPerCapita').innerHTML = '';
+        return;
+      } else {
+        alertBox.style.display = 'none';
+      }
+
       const ud = userData[anio] || userData['2025'];
       let userTotal = ud.contrib + ud.circ + ud.aseo;
       let divisor = 1;
@@ -278,34 +397,56 @@
       <ul class="sub-items">${a.subItems.map(s=>`<li><span>${s.nombre}</span><span style="font-family:'Roboto Mono';font-weight:500">${fmt(s.monto)}</span></li>`).join('')}</ul></div></div>`).join('');
 
     // === % por Proyecto ===
-    const proyData = [
-      {id:'P-2025-001',nombre:'Alumbrado Público Costanera',area:'Seguridad',monto:185000000,porcentaje:1.55,estado:'Completado'},
-      {id:'P-2025-002',nombre:'Multicancha Las Acacias',area:'Deporte',monto:320000000,porcentaje:2.42,estado:'En Ejecución'},
-      {id:'P-2025-003',nombre:'Pavimento Av. Principal',area:'Obras',monto:450000000,porcentaje:3.78,estado:'Completado'},
-      {id:'P-2025-004',nombre:'Ampliación CESFAM',area:'Salud',monto:680000000,porcentaje:4.28,estado:'En Ejecución'},
-      {id:'P-2025-005',nombre:'Televigilancia Centro',area:'Seguridad',monto:220000000,porcentaje:1.85,estado:'Completado'},
-      {id:'P-2025-006',nombre:'Restauración Escuela',area:'Educación',monto:280000000,porcentaje:1.64,estado:'En Ejecución'},
-      {id:'P-2025-007',nombre:'Reciclaje Comunal',area:'Medio Ambiente',monto:95000000,porcentaje:0.80,estado:'Completado'},
-      {id:'P-2025-008',nombre:'Centro Adulto Mayor',area:'Comunitario',monto:150000000,porcentaje:1.01,estado:'En Ejecución'},
-      {id:'P-2025-009',nombre:'Borde Costero',area:'Obras',monto:520000000,porcentaje:3.06,estado:'En Ejecución'},
-      {id:'P-2025-010',nombre:'Digitalización Municipal',area:'Admin',monto:75000000,porcentaje:0.63,estado:'Completado'}
-    ];
+    let proyData = [];
+    try {
+      const apiProy = await App.loadJSON('../data/proyectos.json');
+      if (apiProy && apiProy.length > 0) {
+        proyData = apiProy;
+      } else {
+        throw new Error("No data returned");
+      }
+    } catch (e) {
+      proyData = [
+        {id:'P-2025-001',nombre:'Alumbrado Público Costanera',area:'Seguridad',monto:185000000,porcentaje:1.55,estado:'Completado'},
+        {id:'P-2025-002',nombre:'Multicancha Las Acacias',area:'Deporte',monto:320000000,porcentaje:2.42,estado:'En Ejecución'},
+        {id:'P-2025-003',nombre:'Pavimento Av. Principal',area:'Obras',monto:450000000,porcentaje:3.78,estado:'Completado'},
+        {id:'P-2025-004',nombre:'Ampliación CESFAM',area:'Salud',monto:680000000,porcentaje:4.28,estado:'En Ejecución'},
+        {id:'P-2025-005',nombre:'Televigilancia Centro',area:'Seguridad',monto:220000000,porcentaje:1.85,estado:'Completado'},
+        {id:'P-2025-006',nombre:'Restauración Escuela',area:'Educación',monto:280000000,porcentaje:1.64,estado:'En Ejecución'},
+        {id:'P-2025-007',nombre:'Reciclaje Comunal',area:'Medio Ambiente',monto:95000000,porcentaje:0.80,estado:'Completado'},
+        {id:'P-2025-008',nombre:'Centro Adulto Mayor',area:'Comunitario',monto:150000000,porcentaje:1.01,estado:'En Ejecución'},
+        {id:'P-2025-009',nombre:'Borde Costero',area:'Obras',monto:520000000,porcentaje:3.06,estado:'En Ejecución'},
+        {id:'P-2025-010',nombre:'Digitalización Municipal',area:'Admin',monto:75000000,porcentaje:0.63,estado:'Completado'}
+      ];
+    }
     const filterProy = document.getElementById('filterProyecto');
+    filterProy.innerHTML = '<option value="__all__">Todos</option>';
     proyData.forEach(p => { const o=document.createElement('option'); o.value=p.nombre; o.textContent=p.nombre; filterProy.appendChild(o); });
     window._tables['tableProyectos'] = new DynamicTable('tableProyectos',{data:proyData,columns:[{key:'id',label:'ID',type:'text'},{key:'nombre',label:'Proyecto',type:'text'},{key:'area',label:'Área',type:'text'},{key:'monto',label:'Monto ($)',type:'currency'},{key:'porcentaje',label:'%',type:'percent'},{key:'estado',label:'Estado',type:'status'}]});
     filterProy.addEventListener('change', e => window._tables['tableProyectos'].setFilter('nombre',e.target.value));
 
     // === % por Servicio ===
-    const servData = [
-      {servicio:'Recolección de Residuos',proveedor:'Servicios Ambientales SpA',monto:321000000,porcentaje:2.69},
-      {servicio:'Mantención Alumbrado',proveedor:'Enel Distribución',monto:180000000,porcentaje:1.51},
-      {servicio:'Seguridad Edificios',proveedor:'Securitas Chile S.A.',monto:96000000,porcentaje:0.81},
-      {servicio:'Transporte Escolar',proveedor:'Transportes Litoral',monto:72000000,porcentaje:0.60},
-      {servicio:'Mantención Áreas Verdes',proveedor:'Jardines del Pacífico',monto:145000000,porcentaje:1.22},
-      {servicio:'Conectividad Internet',proveedor:'Movistar Chile',monto:36000000,porcentaje:0.30},
-      {servicio:'Alimentación CESFAM',proveedor:'Catering Municipal',monto:48000000,porcentaje:0.40}
-    ];
+    let servData = [];
+    try {
+      const apiServ = await App.loadJSON('../data/servicios.json');
+      if (apiServ && apiServ.length > 0) {
+        servData = apiServ;
+      } else {
+        throw new Error("No data returned");
+      }
+    } catch (e) {
+      servData = [
+        {servicio:'Recolección de Residuos',proveedor:'Servicios Ambientales SpA',monto:321000000,porcentaje:2.69},
+        {servicio:'Mantención Alumbrado',proveedor:'Enel Distribución',monto:180000000,porcentaje:1.51},
+        {servicio:'Seguridad Edificios',proveedor:'Securitas Chile S.A.',monto:96000000,porcentaje:0.81},
+        {servicio:'Transporte Escolar',proveedor:'Transportes Litoral',monto:72000000,porcentaje:0.60},
+        {servicio:'Mantención Áreas Verdes',proveedor:'Jardines del Pacífico',monto:145000000,porcentaje:1.22},
+        {servicio:'Conectividad Internet',proveedor:'Movistar Chile',monto:36000000,porcentaje:0.30},
+        {servicio:'Alimentación CESFAM',proveedor:'Catering Municipal',monto:48000000,porcentaje:0.40}
+      ];
+    }
     const filterServ = document.getElementById('filterServicio');
+    filterServ.innerHTML = '<option value="__all__">Todos</option>';
     servData.forEach(s => { const o=document.createElement('option'); o.value=s.servicio; o.textContent=s.servicio; filterServ.appendChild(o); });
     window._tables['tableServicios'] = new DynamicTable('tableServicios',{data:servData,columns:[{key:'servicio',label:'Servicio',type:'text'},{key:'proveedor',label:'Proveedor',type:'text'},{key:'monto',label:'Monto ($)',type:'currency'},{key:'porcentaje',label:'%',type:'percent'}]});
     filterServ.addEventListener('change', e => window._tables['tableServicios'].setFilter('servicio',e.target.value));

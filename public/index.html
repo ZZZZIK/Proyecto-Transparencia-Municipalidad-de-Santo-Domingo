@@ -46,10 +46,23 @@
         <span class="material-icons">menu</span>
       </button>
       <div class="collapse navbar-collapse" id="navMain">
-        <ul class="navbar-nav">
+        <ul class="navbar-nav mr-auto">
           <li class="nav-item"><a class="nav-link active" href="index.html"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">home</span> Inicio</a></li>
           <li class="nav-item"><a class="nav-link" href="pages/destino-impuestos.html"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">account_balance_wallet</span> Destino de Impuestos</a></li>
           <li class="nav-item"><a class="nav-link" href="pages/presupuesto.html"><span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">pie_chart</span> Presupuesto Municipal</a></li>
+        </ul>
+        <ul class="navbar-nav d-flex align-items-center" id="nav-session-container">
+          <li class="nav-item" id="nav-login-btn" style="display:flex; align-items:center;">
+            <a href="pages/login.html" style="color:#006FB3 !important; font-weight:700; background:#ffffff !important; border-radius:4px; padding:6px 14px; box-shadow:0 2px 4px rgba(0,0,0,0.15); display:inline-flex; align-items:center; text-decoration:none; height:32px; line-height:1; font-size:0.875rem; margin-top:2px;">
+              <span class="material-icons mr-1" style="font-size:16px; vertical-align:middle; color:#006FB3 !important;">vpn_key</span> ClaveÚnica
+            </a>
+          </li>
+          <li class="nav-item d-flex align-items-center" id="nav-user-info" style="display:none !important">
+            <span style="color:#fff;font-size:0.875rem;margin-right:15px;font-weight:500" id="nav-user-name"></span>
+            <a class="nav-link" href="#" onclick="App.logout()" style="color:#ffb703;font-weight:700;padding-left:0">
+              <span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">logout</span> Cerrar Sesión
+            </a>
+          </li>
         </ul>
       </div>
     </div>
@@ -183,5 +196,40 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.digital.gob.cl/framework/js/gob.cl.js"></script>
   <script src="js/app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const cardDestino = document.getElementById('card-destino');
+      
+      if (App.isLoggedIn()) {
+        const session = App.getUserSession();
+        document.getElementById('nav-login-btn').style.display = 'none';
+        
+        const userInfo = document.getElementById('nav-user-info');
+        userInfo.style.setProperty('display', 'flex', 'important');
+        
+        const firstName = session.user.nombre.split(' ')[0];
+        document.getElementById('nav-user-name').textContent = `Hola, ${firstName}`;
+        
+        // Agregar distintivo de sesión activa en la tarjeta de Destino de Impuestos
+        if (cardDestino) {
+          const meta = cardDestino.querySelector('.card-meta');
+          if (meta) {
+            meta.innerHTML = `<span style="color:#2E86AB;font-weight:500"><span class="material-icons" style="font-size:12px;vertical-align:middle;margin-right:2px">check_circle</span> Sesión Activa: ${firstName}</span><span class="card-count" style="background:rgba(46,134,171,0.1);color:#2E86AB">Acceder</span>`;
+          }
+        }
+      } else {
+        document.getElementById('nav-login-btn').style.display = 'block';
+        document.getElementById('nav-user-info').style.setProperty('display', 'none', 'important');
+        
+        // Agregar distintivo de sesión requerida en la tarjeta de Destino de Impuestos
+        if (cardDestino) {
+          const meta = cardDestino.querySelector('.card-meta');
+          if (meta) {
+            meta.innerHTML = `<span style="color:#d90429;font-weight:500"><span class="material-icons" style="font-size:12px;vertical-align:middle;margin-right:2px">lock</span> Requiere ClaveÚnica</span><span class="card-count" style="background:rgba(217,4,41,0.1);color:#d90429">Privado</span>`;
+          }
+        }
+      }
+    });
+  </script>
 </body>
 </html>

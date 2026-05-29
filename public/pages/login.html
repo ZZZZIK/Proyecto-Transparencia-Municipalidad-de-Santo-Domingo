@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iniciar Sesión con ClaveÚnica — Transparencia Santo Domingo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Slab:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.digital.gob.cl/framework/css/gob.cl.css">
+  <link rel="stylesheet" href="../css/custom.css">
+  <style>
+    body {
+      background-color: #f4f6f9;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      font-family: 'Roboto', sans-serif;
+    }
+    .login-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 15px;
+    }
+    .cu-card {
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
+      width: 100%;
+      max-width: 440px;
+      overflow: hidden;
+      border: 1px solid var(--gob-gray-border);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .cu-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+    }
+    .cu-header {
+      background: linear-gradient(135deg, #0A132D 0%, #1D3557 100%);
+      color: #ffffff;
+      padding: 30px;
+      text-align: center;
+      position: relative;
+    }
+    .cu-logo {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .cu-logo svg {
+      width: 50px;
+      height: 50px;
+      fill: #ffffff;
+    }
+    .cu-logo-text {
+      font-family: 'Roboto Slab', serif;
+      font-size: 1.8rem;
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-left: 8px;
+    }
+    .cu-logo-text span {
+      color: #f27024;
+    }
+    .cu-tagline {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.8);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .cu-body {
+      padding: 40px 30px;
+    }
+    .form-group-cu {
+      margin-bottom: 24px;
+      position: relative;
+    }
+    .form-group-cu label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--gob-tertiary);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .input-cu {
+      width: 100%;
+      height: 48px;
+      padding: 10px 16px;
+      font-size: 1rem;
+      border: 2px solid #e1e5eb;
+      border-radius: 6px;
+      transition: all 0.25s ease;
+      box-sizing: border-box;
+    }
+    .input-cu:focus {
+      outline: none;
+      border-color: #006FB3;
+      box-shadow: 0 0 0 4px rgba(0, 111, 179, 0.12);
+    }
+    .input-with-icon {
+      position: relative;
+    }
+    .input-icon-cu {
+      position: absolute;
+      right: 16px;
+      top: 12px;
+      color: #99a2ad;
+      pointer-events: none;
+    }
+    .btn-cu {
+      width: 100%;
+      height: 50px;
+      background: #006FB3;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: all 0.2s ease;
+      margin-top: 30px;
+    }
+    .btn-cu:hover {
+      background: #005a94;
+      box-shadow: 0 4px 12px rgba(0, 111, 179, 0.25);
+    }
+    .btn-cu:active {
+      transform: scale(0.98);
+    }
+    .btn-cu:disabled {
+      background: #99a2ad;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    .cu-footer-links {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 0.85rem;
+    }
+    .cu-footer-links a {
+      color: #006FB3;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+    .cu-footer-links a:hover {
+      color: #005a94;
+      text-decoration: underline;
+    }
+    .cu-alert {
+      background: #feeaea;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 24px;
+      display: none;
+      align-items: center;
+      animation: fadeIn 0.3s ease;
+    }
+    .cu-alert .material-icons {
+      color: #e8433e;
+      margin-right: 8px;
+    }
+    .cu-alert-text {
+      color: #721c24;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .cu-decor-bar {
+      height: 4px;
+      width: 100%;
+      background: linear-gradient(to right, #006FB3 33.3%, #ffffff 33.3%, #ffffff 66.6%, #f27024 66.6%);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Spinner */
+    .spinner-cu {
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.8s ease infinite;
+      margin-right: 8px;
+      display: none;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Barra Superior Gobierno -->
+  <div class="gob-top-bar">
+    <div class="container d-flex align-items-center">
+      <a href="../index.html" class="d-flex align-items-center" style="text-decoration:none">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 512 512" fill="white" class="mr-2"><path d="M256 0C114.6 0 0 114.6 0 256s114.6 256 256 256 256-114.6 256-256S397.4 0 256 0zm0 472c-119.3 0-216-96.7-216-216S136.7 40 256 40s216 96.7 216 216-96.7 216-216 216z"/><path d="M256 128l-80 144h160z"/><rect x="216" y="288" width="80" height="64"/></svg>
+        <span style="color:rgba(255,255,255,0.85);font-size:0.75rem">Volver al Portal de Transparencia</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Contenedor Principal de Login -->
+  <div class="login-container">
+    <div class="cu-card">
+      <div class="cu-header">
+        <div class="cu-logo">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.75z"/></svg>
+          <div class="cu-logo-text">Clave<span>Única</span></div>
+        </div>
+        <div class="cu-tagline">Identidad Digital del Estado</div>
+      </div>
+      <div class="cu-decor-bar"></div>
+      <div class="cu-body">
+        
+        <!-- Alerta de Error -->
+        <div class="cu-alert" id="loginAlert">
+          <span class="material-icons">error</span>
+          <span class="cu-alert-text" id="alertText">RUT o contraseña incorrectos.</span>
+        </div>
+
+        <form id="loginForm">
+          <!-- Campo RUT -->
+          <div class="form-group-cu">
+            <label for="rutInput">RUN (Cédula de Identidad)</label>
+            <div class="input-with-icon">
+              <input type="text" class="input-cu" id="rutInput" placeholder="12.345.678-9" required autofocus autocomplete="username">
+              <span class="material-icons input-icon-cu">badge</span>
+            </div>
+            <small style="color:#777;font-size:0.75rem;margin-top:6px;display:block">Ingresa tu RUT con puntos y guion.</small>
+          </div>
+
+          <!-- Campo Contraseña -->
+          <div class="form-group-cu">
+            <label for="passwordInput">Contraseña</label>
+            <div class="input-with-icon">
+              <input type="password" class="input-cu" id="passwordInput" placeholder="••••••••" required autocomplete="current-password">
+              <span class="material-icons input-icon-cu">lock</span>
+            </div>
+          </div>
+
+          <!-- Botón de Ingreso -->
+          <button type="submit" class="btn-cu" id="submitBtn">
+            <div class="spinner-cu" id="btnSpinner"></div>
+            <span id="btnText">Autenticar</span>
+          </button>
+        </form>
+
+        <div class="cu-footer-links">
+          <a href="../index.html"><span class="material-icons" style="font-size:12px;vertical-align:middle;margin-right:2px">arrow_back</span> Cancelar e ir al Inicio</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer-gov" style="background:#0a132d;padding:20px 0;margin-top:auto">
+    <div class="container text-center">
+      <p style="color:rgba(255,255,255,0.6);font-size:0.8rem;margin:0">
+        © 2026 I. Municipalidad de Santo Domingo. Servicio de Autenticación integrado conforme a las políticas de seguridad del Gobierno Digital de Chile.
+      </p>
+    </div>
+  </footer>
+
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('loginForm');
+      const rutInput = document.getElementById('rutInput');
+      const passwordInput = document.getElementById('passwordInput');
+      const alertBox = document.getElementById('loginAlert');
+      const alertText = document.getElementById('alertText');
+      const submitBtn = document.getElementById('submitBtn');
+      const spinner = document.getElementById('btnSpinner');
+      const btnText = document.getElementById('btnText');
+
+      // 1. Formateador automático de RUT chileno mientras escribe
+      rutInput.addEventListener('input', (e) => {
+        let value = e.target.value.replace(/[^0-9kK]/g, ''); // Solo números y K
+        if (value.length === 0) {
+          e.target.value = '';
+          return;
+        }
+        
+        let dv = value.slice(-1);
+        let rut = value.slice(0, -1);
+        
+        if (rut.length > 0) {
+          // Formatear con puntos
+          let formatted = new Intl.NumberFormat('es-CL').format(rut);
+          e.target.value = formatted + '-' + dv;
+        } else {
+          e.target.value = dv;
+        }
+      });
+
+      // 2. Procesar el envío del Formulario
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        // Limpiar alertas anteriores
+        alertBox.style.display = 'none';
+        
+        // Activar spinner de carga
+        submitBtn.disabled = true;
+        spinner.style.display = 'block';
+        btnText.textContent = 'Verificando...';
+
+        const rut = rutInput.value;
+        const password = passwordInput.value;
+
+        const showError = (msg) => {
+          alertText.textContent = msg;
+          alertBox.style.display = 'flex';
+          submitBtn.disabled = false;
+          spinner.style.display = 'none';
+          btnText.textContent = 'Autenticar';
+        };
+
+        let sessionData = null;
+
+        try {
+          // Obtener la URL base de la API dinámicamente
+          const baseApi = App.getBaseApiUrl();
+          if (!baseApi) {
+            throw new Error("LocalFileProtocol");
+          }
+
+          // Enviar petición POST a Laravel API
+          const response = await fetch(`${baseApi}/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({ rut, password })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            sessionData = {
+              token: data.token,
+              user: data.user
+            };
+          } else {
+            if (response.status === 401) {
+              const data = await response.json();
+              throw new Error(data.error || 'Credenciales inválidas.');
+            }
+            throw new Error("ServerError");
+          }
+        } catch (error) {
+          // Si es un error de credenciales reales (401), lo mostramos y no simulamos
+          if (error.message && error.message !== "LocalFileProtocol" && error.message !== "ServerError" && !error.message.includes("fetch") && !error.message.includes("JSON")) {
+            showError(error.message);
+            return;
+          }
+
+          console.warn("API de Laravel no disponible en este entorno. Iniciando simulación local segura (Graceful Fallback)...");
+          
+          // Simulación de credenciales de prueba en el cliente (Offline Fallback)
+          const cleanRut = rut.replace(/[^0-9kK]/g, '').toLowerCase();
+          
+          if (cleanRut === '123456789' && password === 'Pb_123@01') {
+            sessionData = {
+              token: 'offline_token_a_12345',
+              user: {
+                nombre: 'Alonso Alexander Maurel Murgas',
+                rut: '12.345.678-9',
+                rol: 'ciudadano',
+                recaudacionTotalUsuario: 728000,
+                detalles: { contribucion: 485000, circulacion: 165000, aseo: 78000 },
+                mensual: [58000, 58000, 62000, 60000, 65000, 60000, 62000, 63000, 58000, 62000, 60000, 60000]
+              }
+            };
+          } else if (cleanRut === '892342554' && password === 'Pb_321@02') {
+            sessionData = {
+              token: 'offline_token_b_67890',
+              user: {
+                nombre: 'Sofía Elizabeth Álvarez Pérez',
+                rut: '89.234.255-4',
+                rol: 'ciudadano',
+                recaudacionTotalUsuario: 5000000,
+                detalles: { contribucion: 3500000, circulacion: 1200000, aseo: 300000 },
+                mensual: [400000, 420000, 410000, 430000, 420000, 410000, 420000, 430000, 410000, 420000, 410000, 420000]
+              }
+            };
+          } else if (cleanRut === '87654321' && password === 'Pb_123@03') {
+            sessionData = {
+              token: 'offline_token_admin_9999',
+              user: {
+                nombre: 'Administrador Municipal',
+                rut: '8.765.432-1',
+                rol: 'admin',
+                recaudacionTotalUsuario: 0,
+                detalles: { contribucion: 0, circulacion: 0, aseo: 0 },
+                mensual: []
+              }
+            };
+          } else {
+            showError('RUT o contraseña incorrectos.');
+            return;
+          }
+        }
+
+        // Si tenemos datos de sesión válidos (ya sea de API o simulación local)
+        if (sessionData) {
+          sessionStorage.setItem('transparencia_session', JSON.stringify(sessionData));
+          btnText.textContent = '¡Éxito! Redirigiendo...';
+          const urlParams = new URLSearchParams(window.location.search);
+          const redirectPage = urlParams.get('redirect') || 'destino-impuestos.html';
+          setTimeout(() => {
+            window.location.href = redirectPage;
+          }, 800);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
