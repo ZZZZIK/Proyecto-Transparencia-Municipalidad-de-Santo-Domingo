@@ -358,4 +358,20 @@ INSERT INTO `periodos_consulta` (`anio`, `mes`, `nombre_mes`, `habilitado`) VALU
 (2026, '11', 'Noviembre', 0),
 (2026, '12', 'Diciembre', 0);
 
+-- Tabla de Log de Cargas de Transparencia (Auditoría ISO 27001)
+-- Registra cada operación de carga masiva realizada por el Administrador Municipal
+DROP TABLE IF EXISTS `cargas_transparencia`;
+CREATE TABLE `cargas_transparencia` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `admin_rut_hash` VARCHAR(64) NOT NULL,
+  `tipo_carga` VARCHAR(50) NOT NULL COMMENT 'recaudacion, gastos, proyectos, servicios, metadata',
+  `nombre_archivo` VARCHAR(255) NOT NULL,
+  `registros_procesados` INT NOT NULL DEFAULT 0,
+  `registros_actualizados` INT NOT NULL DEFAULT 0,
+  `registros_insertados` INT NOT NULL DEFAULT 0,
+  `estado` VARCHAR(20) NOT NULL DEFAULT 'exitoso' COMMENT 'exitoso, fallido, revertido',
+  `detalle_error` TEXT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;

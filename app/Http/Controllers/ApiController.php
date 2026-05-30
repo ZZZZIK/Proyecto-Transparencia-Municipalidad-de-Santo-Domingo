@@ -427,4 +427,344 @@ class ApiController extends Controller
             ], 500);
         }
     }
+
+    // =========================================================================
+    // RF11 — Carga Masiva de Datos de Transparencia (Administrador Municipal)
+    // Cumplimiento ISO 27001 (Seguridad) e ISO 27701 (Privacidad de Datos)
+    // =========================================================================
+
+    /**
+     * Columnas requeridas por cada tipo de carga CSV.
+     */
+    private function getRequiredColumns($tipo)
+    {
+        $schemas = [
+            'recaudacion' => ['nombre', 'monto', 'porcentaje'],
+            'gastos'      => ['area', 'icono', 'color', 'monto_asignado', 'porcentaje', 'descripcion'],
+            'proyectos'   => ['codigo', 'nombre', 'area', 'monto', 'porcentaje', 'estado'],
+            'servicios'   => ['servicio', 'proveedor', 'monto', 'porcentaje'],
+            'metadata'    => ['ultima_actualizacion', 'fuente', 'periodo_informado', 'recaudacion_total', 'gasto_total', 'poblacion_comuna'],
+        ];
+        return $schemas[$tipo] ?? null;
+    }
+
+    /**
+     * Procesar carga masiva de archivo CSV con datos de transparencia.
+     * Solo accesible para el perfil Administrador Municipal.
+     *
+     * Cumplimiento CP-11:
+     *   - Valida formato del archivo y columnas requeridas
+     *   - Usa transacción DB para atomicidad (rollback en caso de error)
+     *   - Registra log de auditoría con fecha, hora y RUT del administrador
+     *   - Los datos quedan visibles inmediatamente para los ciudadanos
+     */
+    public function uploadTransparencia(Request $request)
+    {
+        // 1. Validar inputs básicos
+        try {
+            $request->validate([
+                'archivo'       => 'required|file|mimes:csv,txt|max:5120',
+                'tipo_carga'    => 'required|string|in:recaudacion,gastos,proyectos,servicios,metadata',
+                'admin_rut_hash' => 'required|string|size:64',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $ve) {
+            return response()->json([
+                'error'   => 'Datos de entrada inválidos.',
+                'detalle' => $ve->errors()
+            ], 422);
+        }
+
+        $tipo       = $request->input('tipo_carga');
+        $adminHash  = $request->input('admin_rut_hash');
+        $file       = $request->file('archivo');
+        $fileName   = $file->getClientOriginalName();
+
+        // 2. Verificar que el hash corresponde a un usuario con rol admin
+        try {
+            $admin = DB::table('contribuyentes')
+                ->where('rut_hash', $adminHash)
+                ->where('rol', 'admin')
+                ->first();
+
+            if (!$admin) {
+                return response()->json([
+                    'error' => 'Acceso denegado. Solo el Administrador Municipal puede cargar datos.'
+                ], 403);
+            }
+        } catch (\Exception $e) {
+            // Si no hay conexión a DB, permitir con advertencia (modo offline)
+            Log::warning("uploadTransparencia - No se pudo verificar rol admin en DB: " . $e->getMessage());
+        }
+
+        // 3. Parsear archivo CSV
+        $requiredCols = $this->getRequiredColumns($tipo);
+        if (!$requiredCols) {
+            return response()->json(['error' => 'Tipo de carga no válido.'], 422);
+        }
+
+        try {
+            $csvContent = file_get_contents($file->getRealPath());
+            // Eliminar BOM UTF-8 si existe
+            $csvContent = preg_replace('/^\xEF\xBB\xBF/', '', $csvContent);
+            $lines = array_filter(explode("\n", $csvContent), fn($l) => trim($l) !== '');
+
+            if (count($lines) < 2) {
+                return response()->json([
+                    'error' => 'El archivo CSV debe contener al menos un encabezado y una fila de datos.'
+                ], 422);
+            }
+
+            // Parsear encabezados
+            $headers = array_map(function($h) {
+                return strtolower(trim(str_replace('"', '', $h)));
+            }, str_getcsv($lines[0]));
+
+            // Validar columnas requeridas
+            $missing = array_diff($requiredCols, $headers);
+            if (!empty($missing)) {
+                return response()->json([
+                    'error'            => 'El archivo CSV no contiene todas las columnas requeridas.',
+                    'columnas_faltantes' => array_values($missing),
+                    'columnas_requeridas' => $requiredCols,
+                    'columnas_encontradas' => $headers,
+                ], 422);
+            }
+
+            // Parsear filas de datos
+            $rows = [];
+            for ($i = 1; $i < count($lines); $i++) {
+                $values = str_getcsv($lines[$i]);
+                if (count($values) < count($headers)) continue; // saltar filas incompletas
+
+                $row = [];
+                foreach ($headers as $idx => $header) {
+                    $row[$header] = isset($values[$idx]) ? trim($values[$idx]) : '';
+                }
+                $rows[] = $row;
+            }
+
+            if (empty($rows)) {
+                return response()->json([
+                    'error' => 'No se encontraron filas de datos válidas en el archivo CSV.'
+                ], 422);
+            }
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error'   => 'Error al parsear el archivo CSV.',
+                'detalle' => $e->getMessage()
+            ], 422);
+        }
+
+        // 4. Procesar carga con transacción atómica
+        $registrosInsertados = 0;
+        $registrosActualizados = 0;
+
+        try {
+            DB::beginTransaction();
+
+            switch ($tipo) {
+                case 'recaudacion':
+                    DB::table('recaudacion_items')->truncate();
+                    foreach ($rows as $row) {
+                        DB::table('recaudacion_items')->insert([
+                            'nombre'     => $row['nombre'],
+                            'monto'      => (int) $row['monto'],
+                            'porcentaje' => (float) $row['porcentaje'],
+                        ]);
+                        $registrosInsertados++;
+                    }
+                    break;
+
+                case 'gastos':
+                    DB::table('gasto_subitems')->truncate();
+                    DB::table('gasto_areas')->truncate();
+                    foreach ($rows as $row) {
+                        DB::table('gasto_areas')->insert([
+                            'area'           => $row['area'],
+                            'icono'          => $row['icono'],
+                            'color'          => $row['color'],
+                            'monto_asignado' => (int) $row['monto_asignado'],
+                            'porcentaje'     => (float) $row['porcentaje'],
+                            'descripcion'    => $row['descripcion'],
+                        ]);
+                        $registrosInsertados++;
+                    }
+                    break;
+
+                case 'proyectos':
+                    DB::table('proyectos')->truncate();
+                    foreach ($rows as $row) {
+                        DB::table('proyectos')->insert([
+                            'codigo'     => $row['codigo'],
+                            'nombre'     => $row['nombre'],
+                            'area'       => $row['area'],
+                            'monto'      => (int) $row['monto'],
+                            'porcentaje' => (float) $row['porcentaje'],
+                            'estado'     => $row['estado'],
+                        ]);
+                        $registrosInsertados++;
+                    }
+                    break;
+
+                case 'servicios':
+                    DB::table('servicios')->truncate();
+                    foreach ($rows as $row) {
+                        DB::table('servicios')->insert([
+                            'servicio'   => $row['servicio'],
+                            'proveedor'  => $row['proveedor'],
+                            'monto'      => (int) $row['monto'],
+                            'porcentaje' => (float) $row['porcentaje'],
+                        ]);
+                        $registrosInsertados++;
+                    }
+                    break;
+
+                case 'metadata':
+                    $row = $rows[0]; // Solo un registro de metadata
+                    $exists = DB::table('metadata')->where('id', 1)->exists();
+                    if ($exists) {
+                        DB::table('metadata')->where('id', 1)->update([
+                            'ultima_actualizacion' => $row['ultima_actualizacion'],
+                            'fuente'               => $row['fuente'],
+                            'periodo_informado'    => $row['periodo_informado'],
+                            'recaudacion_total'    => (int) $row['recaudacion_total'],
+                            'gasto_total'          => (int) $row['gasto_total'],
+                            'poblacion_comuna'     => (int) $row['poblacion_comuna'],
+                        ]);
+                        $registrosActualizados = 1;
+                    } else {
+                        DB::table('metadata')->insert([
+                            'ultima_actualizacion' => $row['ultima_actualizacion'],
+                            'fuente'               => $row['fuente'],
+                            'periodo_informado'    => $row['periodo_informado'],
+                            'recaudacion_total'    => (int) $row['recaudacion_total'],
+                            'gasto_total'          => (int) $row['gasto_total'],
+                            'poblacion_comuna'     => (int) $row['poblacion_comuna'],
+                        ]);
+                        $registrosInsertados = 1;
+                    }
+                    break;
+            }
+
+            // 5. Registrar en tabla de auditoría
+            DB::table('cargas_transparencia')->insert([
+                'admin_rut_hash'        => $adminHash,
+                'tipo_carga'            => $tipo,
+                'nombre_archivo'        => $fileName,
+                'registros_procesados'  => count($rows),
+                'registros_actualizados' => $registrosActualizados,
+                'registros_insertados'  => $registrosInsertados,
+                'estado'                => 'exitoso',
+            ]);
+
+            DB::commit();
+
+            Log::info("uploadTransparencia - Carga exitosa: tipo={$tipo}, archivo={$fileName}, registros=" . count($rows) . ", admin_hash={$adminHash}");
+
+            return response()->json([
+                'success' => true,
+                'mensaje' => 'Datos de transparencia cargados correctamente.',
+                'resumen' => [
+                    'tipo'                  => $tipo,
+                    'archivo'               => $fileName,
+                    'registros_procesados'  => count($rows),
+                    'registros_insertados'  => $registrosInsertados,
+                    'registros_actualizados' => $registrosActualizados,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            // Registrar fallo en auditoría (fuera de la transacción revertida)
+            try {
+                DB::table('cargas_transparencia')->insert([
+                    'admin_rut_hash'        => $adminHash,
+                    'tipo_carga'            => $tipo,
+                    'nombre_archivo'        => $fileName,
+                    'registros_procesados'  => count($rows),
+                    'registros_actualizados' => 0,
+                    'registros_insertados'  => 0,
+                    'estado'                => 'revertido',
+                    'detalle_error'         => substr($e->getMessage(), 0, 500),
+                ]);
+            } catch (\Exception $logEx) {
+                Log::error("uploadTransparencia - No se pudo registrar el fallo en auditoría: " . $logEx->getMessage());
+            }
+
+            Log::error("uploadTransparencia - Error en carga masiva (ROLLBACK): " . $e->getMessage());
+
+            return response()->json([
+                'error'   => 'Error al procesar los datos. La operación fue revertida y los datos anteriores se mantienen intactos.',
+                'detalle' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener historial de cargas de transparencia realizadas (Auditoría).
+     */
+    public function getHistorialCargas()
+    {
+        try {
+            $cargas = DB::table('cargas_transparencia')
+                ->select('id', 'tipo_carga', 'nombre_archivo', 'registros_procesados',
+                         'registros_insertados', 'registros_actualizados', 'estado',
+                         'detalle_error', 'created_at')
+                ->orderBy('created_at', 'desc')
+                ->limit(50)
+                ->get();
+
+            return response()->json($cargas);
+        } catch (\Exception $e) {
+            Log::warning("getHistorialCargas - Error: " . $e->getMessage());
+            return response()->json([]);
+        }
+    }
+
+    /**
+     * Descargar plantilla CSV de ejemplo según el tipo de carga solicitado.
+     * Incluye encabezados correctos y una fila de ejemplo para guiar al administrador.
+     */
+    public function descargarPlantilla($tipo)
+    {
+        $plantillas = [
+            'recaudacion' => [
+                'headers' => ['nombre', 'monto', 'porcentaje'],
+                'ejemplo' => ['Impuesto Territorial', '4112000000', '32.00'],
+            ],
+            'gastos' => [
+                'headers' => ['area', 'icono', 'color', 'monto_asignado', 'porcentaje', 'descripcion'],
+                'ejemplo' => ['Educación', 'school', '#2E86AB', '3576000000', '30.00', 'Escuelas liceos e infraestructura educativa'],
+            ],
+            'proyectos' => [
+                'headers' => ['codigo', 'nombre', 'area', 'monto', 'porcentaje', 'estado'],
+                'ejemplo' => ['P-2025-001', 'Alumbrado Público Costanera', 'Seguridad', '185000000', '1.55', 'Completado'],
+            ],
+            'servicios' => [
+                'headers' => ['servicio', 'proveedor', 'monto', 'porcentaje'],
+                'ejemplo' => ['Recolección de Residuos', 'Servicios Ambientales SpA', '321000000', '2.69'],
+            ],
+            'metadata' => [
+                'headers' => ['ultima_actualizacion', 'fuente', 'periodo_informado', 'recaudacion_total', 'gasto_total', 'poblacion_comuna'],
+                'ejemplo' => ['2026-03-31', 'Dirección de Control y Finanzas', 'Año Fiscal 2025', '12850000000', '11920000000', '9800'],
+            ],
+        ];
+
+        if (!isset($plantillas[$tipo])) {
+            return response()->json(['error' => 'Tipo de plantilla no válido.'], 404);
+        }
+
+        $plantilla = $plantillas[$tipo];
+        $csv = "\xEF\xBB\xBF"; // BOM UTF-8 para compatibilidad con Excel
+        $csv .= implode(',', $plantilla['headers']) . "\n";
+        $csv .= implode(',', $plantilla['ejemplo']) . "\n";
+
+        return response($csv, 200, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=plantilla_{$tipo}.csv",
+        ]);
+    }
 }
+

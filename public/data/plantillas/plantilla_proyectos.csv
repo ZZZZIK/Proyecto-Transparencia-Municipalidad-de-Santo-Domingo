@@ -1,0 +1,11 @@
+codigo,nombre,area,monto,porcentaje,estado
+P-2025-001,Alumbrado Público Costanera,Seguridad,185000000,1.55,Completado
+P-2025-002,Multicancha Las Acacias,Deporte,320000000,2.42,En Ejecución
+P-2025-003,Pavimento Av. Principal,Obras,450000000,3.78,Completado
+P-2025-004,Ampliación CESFAM,Salud,680000000,4.28,En Ejecución
+P-2025-005,Televigilancia Centro,Seguridad,220000000,1.85,Completado
+P-2025-006,Restauración Escuela,Educación,280000000,1.64,En Ejecución
+P-2025-007,Reciclaje Comunal,Medio Ambiente,95000000,0.80,Completado
+P-2025-008,Centro Adulto Mayor,Comunitario,150000000,1.01,En Ejecución
+P-2025-009,Borde Costero,Obras,520000000,3.06,En Ejecución
+P-2025-010,Digitalización Municipal,Admin,75000000,0.63,Completado

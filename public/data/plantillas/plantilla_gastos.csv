@@ -1,0 +1,9 @@
+area,icono,color,monto_asignado,porcentaje,descripcion
+Educación,school,#2E86AB,3576000000,30.00,Escuelas liceos e infraestructura educativa
+Salud,local_hospital,#E8433E,2384000000,20.00,CESFAM postas rurales y prevención
+Seguridad Ciudadana,shield,#1B4332,1430000000,12.00,Vigilancia iluminación y seguridad comunal
+Obras Municipales,construction,#F77F00,1192000000,10.00,Pavimentación áreas verdes y equipamiento
+Servicios Comunitarios,groups,#7209B7,952000000,8.00,Programas sociales y organizaciones comunitarias
+Medio Ambiente,eco,#52B788,714000000,6.00,Residuos reciclaje y conservación costera
+Cultura y Deporte,sports_soccer,#E09F3E,595000000,5.00,Eventos talleres e instalaciones deportivas
+Administración,account_balance,#6C757D,1077000000,9.00,Funcionamiento interno del municipio

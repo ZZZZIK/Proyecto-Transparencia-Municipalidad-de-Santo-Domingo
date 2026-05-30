@@ -41,4 +41,15 @@ Route::middleware('throttle:60,1')->group(function () {
     
     // Habilitar/Deshabilitar un período específico (requiere autenticación o simulación de rol admin)
     Route::post('/periodos/toggle', [ApiController::class, 'togglePeriodo']);
+    
+    // --- Rutas de Administración: Carga Masiva de Datos (RF11) ---
+    
+    // Cargar archivo CSV con datos de transparencia (solo Administrador)
+    Route::post('/admin/upload', [ApiController::class, 'uploadTransparencia']);
+    
+    // Obtener historial de cargas realizadas por el Administrador
+    Route::get('/admin/cargas', [ApiController::class, 'getHistorialCargas']);
+    
+    // Descargar plantilla CSV de ejemplo según el tipo de carga
+    Route::get('/admin/plantilla/{tipo}', [ApiController::class, 'descargarPlantilla']);
 });

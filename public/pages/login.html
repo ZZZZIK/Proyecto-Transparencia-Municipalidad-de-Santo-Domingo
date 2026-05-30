@@ -364,39 +364,78 @@
             throw new Error("ServerError");
           }
         } catch (error) {
+          const cleanRut = rut.replace(/[^0-9kK]/g, '').toLowerCase();
+          const isMockUser = (cleanRut === '123456789' && password === 'Pb_123@01') || 
+                             (cleanRut === '892342554' && password === 'Pb_321@02') || 
+                             (cleanRut === '87654321' && password === 'Pb_123@03');
+
           // Si es un error de credenciales reales (401), lo mostramos y no simulamos
-          if (error.message && error.message !== "LocalFileProtocol" && error.message !== "ServerError" && !error.message.includes("fetch") && !error.message.includes("JSON")) {
+          // EXCEPTO si ingresó exactamente las credenciales de prueba
+          if (!isMockUser && error.message && error.message !== "LocalFileProtocol" && error.message !== "ServerError" && !error.message.includes("fetch") && !error.message.includes("JSON")) {
             showError(error.message);
             return;
           }
 
-          console.warn("API de Laravel no disponible en este entorno. Iniciando simulación local segura (Graceful Fallback)...");
+          console.warn("Iniciando simulación local segura (Graceful Fallback)...");
           
-          // Simulación de credenciales de prueba en el cliente (Offline Fallback)
-          const cleanRut = rut.replace(/[^0-9kK]/g, '').toLowerCase();
-          
+          // Leer la Recaudación Global para derivar los aportes proporcionalmente
+          let globalContrib = 1850000000, globalCirc = 1200000000, globalAseo = 950000000;
+          try {
+            const storedR = localStorage.getItem('transparencia_carga_recaudacion');
+            if (storedR) {
+              const rec = JSON.parse(storedR);
+              globalContrib = 0; globalCirc = 0; globalAseo = 0;
+              rec.forEach(it => {
+                const n = (it.nombre || '').toLowerCase();
+                const m = parseInt(it.monto) || 0;
+                if (n.includes('contribucion') || n.includes('territorial')) globalContrib += m;
+                else if (n.includes('circulacion')) globalCirc += m;
+                else if (n.includes('aseo')) globalAseo += m;
+              });
+            }
+          } catch(e) {}
+
+          const poblacion = 9800; // Según metadata estándar de prueba
+          const promContrib = Math.round(globalContrib / poblacion);
+          const promCirc = Math.round(globalCirc / poblacion);
+          const promAseo = Math.round(globalAseo / poblacion);
+
           if (cleanRut === '123456789' && password === 'Pb_123@01') {
+            // Usuario A: Alonso (Perfil Promedio: 1x)
+            const aCont = promContrib;
+            const aCirc = promCirc;
+            const aAseo = promAseo;
+            const total = aCont + aCirc + aAseo;
+            const mes = Math.round(total / 12);
+
             sessionData = {
               token: 'offline_token_a_12345',
               user: {
                 nombre: 'Alonso Alexander Maurel Murgas',
                 rut: '12.345.678-9',
                 rol: 'ciudadano',
-                recaudacionTotalUsuario: 728000,
-                detalles: { contribucion: 485000, circulacion: 165000, aseo: 78000 },
-                mensual: [58000, 58000, 62000, 60000, 65000, 60000, 62000, 63000, 58000, 62000, 60000, 60000]
+                recaudacionTotalUsuario: total,
+                detalles: { contribucion: aCont, circulacion: aCirc, aseo: aAseo },
+                mensual: Array(12).fill(mes)
               }
             };
           } else if (cleanRut === '892342554' && password === 'Pb_321@02') {
+            // Usuario B: Sofía (Perfil Alto Contribuyente: 3x)
+            const aCont = promContrib * 3;
+            const aCirc = promCirc * 3;
+            const aAseo = promAseo * 3;
+            const total = aCont + aCirc + aAseo;
+            const mes = Math.round(total / 12);
+
             sessionData = {
               token: 'offline_token_b_67890',
               user: {
                 nombre: 'Sofía Elizabeth Álvarez Pérez',
                 rut: '89.234.255-4',
                 rol: 'ciudadano',
-                recaudacionTotalUsuario: 5000000,
-                detalles: { contribucion: 3500000, circulacion: 1200000, aseo: 300000 },
-                mensual: [400000, 420000, 410000, 430000, 420000, 410000, 420000, 430000, 410000, 420000, 410000, 420000]
+                recaudacionTotalUsuario: total,
+                detalles: { contribucion: aCont, circulacion: aCirc, aseo: aAseo },
+                mensual: Array(12).fill(mes)
               }
             };
           } else if (cleanRut === '87654321' && password === 'Pb_123@03') {

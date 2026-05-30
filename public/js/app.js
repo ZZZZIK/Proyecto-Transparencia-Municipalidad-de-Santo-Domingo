@@ -139,6 +139,10 @@ const App = {
       container.querySelectorAll('.bar-fill').forEach(bar => {
         bar.style.width = bar.style.width; // Force reflow
       });
+      // Asegurar que se muestren los gráficos re-renderizados forzando la clase animate-in
+      container.querySelectorAll('.animate-on-scroll').forEach(el => {
+        el.classList.add('animate-in');
+      });
     }, 100);
   },
 
