@@ -1,34 +1,77 @@
 {
   "metadata": {
-    "ultimaActualizacion": "2026-03-31",
+    "ultimaActualizacion": "2026-05-30",
     "fuente": "Dirección de Control y Finanzas",
     "periodoInformado": "Año Fiscal 2025",
-    "recaudacionTotal": 12850000000,
-    "gastoTotal": 11920000000,
-    "poblacionComuna": 9800
+    "recaudacionTotal": 2728000,
+    "gastoTotal": 2728000,
+    "poblacionComuna": 2
   },
   "resumenRecaudacion": {
-    "total": 12850000000,
+    "total": 2728000,
     "items": [
-      {"nombre": "Impuesto Territorial", "monto": 4112000000, "porcentaje": 32.0},
-      {"nombre": "Permisos de Circulación", "monto": 2184500000, "porcentaje": 17.0},
-      {"nombre": "Patentes Municipales", "monto": 1927500000, "porcentaje": 15.0},
-      {"nombre": "Fondo Común Municipal", "monto": 2570000000, "porcentaje": 20.0},
-      {"nombre": "Derechos de Aseo", "monto": 770000000, "porcentaje": 6.0},
-      {"nombre": "Multas e Infracciones", "monto": 385500000, "porcentaje": 3.0},
-      {"nombre": "Transferencias Gob. Central", "monto": 642500000, "porcentaje": 5.0},
-      {"nombre": "Otros Ingresos", "monto": 257000000, "porcentaje": 2.0}
+      {"nombre": "Impuesto Territorial", "monto": 1885000, "porcentaje": 69.1},
+      {"nombre": "Permisos de Circulación", "monto": 665000, "porcentaje": 24.4},
+      {"nombre": "Derechos de Aseo", "monto": 178000, "porcentaje": 6.5}
     ]
   },
   "destinoPorArea": [
-    {"area":"Educación","icono":"school","color":"#2E86AB","montoAsignado":3576000000,"porcentaje":30.0,"descripcion":"Escuelas, liceos e infraestructura educativa.","subItems":[{"nombre":"Personal Docente","monto":2146000000},{"nombre":"Infraestructura Escolar","monto":536000000},{"nombre":"Programas Educativos","monto":358000000},{"nombre":"Material y Tecnología","monto":214000000},{"nombre":"Becas","monto":179000000},{"nombre":"Alimentación Escolar","monto":143000000}]},
-    {"area":"Salud","icono":"local_hospital","color":"#E8433E","montoAsignado":2384000000,"porcentaje":20.0,"descripcion":"CESFAM, postas rurales y prevención.","subItems":[{"nombre":"Personal de Salud","monto":1192000000},{"nombre":"Insumos y Medicamentos","monto":358000000},{"nombre":"Mantención CESFAM","monto":238000000},{"nombre":"Prevención","monto":238000000},{"nombre":"Equipamiento","monto":179000000},{"nombre":"Atención Dental","monto":179000000}]},
-    {"area":"Seguridad Ciudadana","icono":"shield","color":"#1B4332","montoAsignado":1430000000,"porcentaje":12.0,"descripcion":"Vigilancia, iluminación y seguridad comunal.","subItems":[{"nombre":"Televigilancia","monto":429000000},{"nombre":"Iluminación LED","monto":357000000},{"nombre":"Oficina Seguridad","monto":286000000},{"nombre":"Plan Cuadrante","monto":215000000},{"nombre":"Alarmas Comunitarias","monto":143000000}]},
-    {"area":"Obras Municipales","icono":"construction","color":"#F77F00","montoAsignado":1192000000,"porcentaje":10.0,"descripcion":"Pavimentación, áreas verdes y equipamiento.","subItems":[{"nombre":"Pavimentación","monto":358000000},{"nombre":"Áreas Verdes","monto":238000000},{"nombre":"Edificios Municipales","monto":238000000},{"nombre":"Sedes Comunitarias","monto":179000000},{"nombre":"Señalización","monto":179000000}]},
-    {"area":"Servicios Comunitarios","icono":"groups","color":"#7209B7","montoAsignado":952000000,"porcentaje":8.0,"descripcion":"Programas sociales y organizaciones comunitarias.","subItems":[{"nombre":"Adulto Mayor","monto":238000000},{"nombre":"Protección de Derechos","monto":190000000},{"nombre":"Inclusión","monto":190000000},{"nombre":"Org. Comunitarias","monto":190000000},{"nombre":"Registro Social","monto":144000000}]},
-    {"area":"Medio Ambiente","icono":"eco","color":"#52B788","montoAsignado":714000000,"porcentaje":6.0,"descripcion":"Residuos, reciclaje y conservación costera.","subItems":[{"nombre":"Recolección Residuos","monto":321000000},{"nombre":"Reciclaje","monto":143000000},{"nombre":"Ecosistemas Costeros","monto":107000000},{"nombre":"Educación Ambiental","monto":71000000},{"nombre":"Monitoreo","monto":72000000}]},
-    {"area":"Cultura y Deporte","icono":"sports_soccer","color":"#E09F3E","montoAsignado":595000000,"porcentaje":5.0,"descripcion":"Eventos, talleres e instalaciones deportivas.","subItems":[{"nombre":"Instalaciones Deportivas","monto":178000000},{"nombre":"Eventos Culturales","monto":149000000},{"nombre":"Escuelas Deportivas","monto":119000000},{"nombre":"Talleres","monto":89000000},{"nombre":"Biblioteca","monto":60000000}]},
-    {"area":"Administración","icono":"account_balance","color":"#6C757D","montoAsignado":1077000000,"porcentaje":9.0,"descripcion":"Funcionamiento interno del municipio.","subItems":[{"nombre":"Personal Administrativo","monto":646000000},{"nombre":"Tecnología","monto":162000000},{"nombre":"Servicios Básicos","monto":108000000},{"nombre":"Insumos","monto":86000000},{"nombre":"Capacitación","monto":75000000}]}
+    {
+      "area": "Educación",
+      "icono": "school",
+      "color": "#2E86AB",
+      "porcentaje": 30.0,
+      "descripcion": "Mantenimiento de colegios, pago docentes y becas"
+    },
+    {
+      "area": "Salud",
+      "icono": "local_hospital",
+      "color": "#E8433E",
+      "porcentaje": 20.0,
+      "descripcion": "Atención primaria, insumos CESFAM y urgencias"
+    },
+    {
+      "area": "Seguridad",
+      "icono": "security",
+      "color": "#F77F00",
+      "porcentaje": 12.0,
+      "descripcion": "Vehículos de patrullaje, cámaras y prevención"
+    },
+    {
+      "area": "Obras",
+      "icono": "construction",
+      "color": "#52B788",
+      "porcentaje": 10.0,
+      "descripcion": "Pavimentación, plazas y alumbrado público"
+    },
+    {
+      "area": "Comunidad",
+      "icono": "groups",
+      "color": "#7209B7",
+      "porcentaje": 8.0,
+      "descripcion": "Subsidios, talleres y ayuda social directa"
+    },
+    {
+      "area": "Medio Ambiente",
+      "icono": "eco",
+      "color": "#1B4332",
+      "porcentaje": 6.0,
+      "descripcion": "Recolección basura, reciclaje y áreas verdes"
+    },
+    {
+      "area": "Cultura",
+      "icono": "palette",
+      "color": "#E09F3E",
+      "porcentaje": 5.0,
+      "descripcion": "Eventos, bibliotecas y fomento deportivo"
+    },
+    {
+      "area": "Administración",
+      "icono": "account_balance",
+      "color": "#6C757D",
+      "porcentaje": 9.0,
+      "descripcion": "Gastos operativos, sistemas y personal"
+    }
   ],
   "proyeccionesFinancieras": {
     "anioProyectado": 2026,

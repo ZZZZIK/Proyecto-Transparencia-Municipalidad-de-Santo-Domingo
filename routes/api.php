@@ -52,4 +52,7 @@ Route::middleware('throttle:60,1')->group(function () {
     
     // Descargar plantilla CSV de ejemplo según el tipo de carga
     Route::get('/admin/plantilla/{tipo}', [ApiController::class, 'descargarPlantilla']);
+    
+    // Obtener resumen de contribuciones totales de todos los vecinos
+    Route::get('/contribuyentes/resumen', [ApiController::class, 'getResumenContribuyentes']);
 });

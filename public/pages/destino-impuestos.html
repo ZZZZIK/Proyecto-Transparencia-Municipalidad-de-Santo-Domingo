@@ -170,10 +170,9 @@
                     <div>
                       <h4 style="font-size:0.85rem;color:var(--gob-tertiary);margin-bottom:4px;font-weight:700">El
                         contexto de tu aporte</h4>
-                      <p style="font-size:0.75rem;color:#555;margin:0;line-height:1.4">Tus impuestos se suman a los del
-                        resto de los vecinos, constituyendo el <strong id="lblPorcentajeVecinos"
+                      <p style="font-size:0.75rem;color:#555;margin:0;line-height:1.4">Tus impuestos financian directamente el <strong id="lblPorcentajeVecinos"
                           style="color:var(--gob-primary)">--%</strong> del Presupuesto Total de Santo Domingo (<strong
-                          id="lblPresupuestoTotal">--</strong>). El resto se financia mediante el Fondo Común Municipal
+                          id="lblPresupuestoTotal">--</strong>). El resto es financiado por los demás vecinos, el Fondo Común Municipal
                         y aportes del Gobierno.</p>
                     </div>
                   </div>
@@ -451,6 +450,18 @@
           aseo: Math.round(data.contribuyenteInfo.detalles.aseo * 1.05),
           monthly: data.contribuyenteInfo.mensual.map(m => Math.round(m * 1.05))
         };
+        userData['2024'] = {
+          contrib: Math.round(data.contribuyenteInfo.detalles.contribucion * 0.75),
+          circ: Math.round(data.contribuyenteInfo.detalles.circulacion * 0.75),
+          aseo: Math.round(data.contribuyenteInfo.detalles.aseo * 0.75),
+          monthly: data.contribuyenteInfo.mensual.map(m => Math.round(m * 0.75))
+        };
+        userData['2023'] = {
+          contrib: Math.round(data.contribuyenteInfo.detalles.contribucion * 0.50),
+          circ: Math.round(data.contribuyenteInfo.detalles.circulacion * 0.50),
+          aseo: Math.round(data.contribuyenteInfo.detalles.aseo * 0.50),
+          monthly: data.contribuyenteInfo.mensual.map(m => Math.round(m * 0.50))
+        };
       }
 
       let areas = data.destinoPorArea;
@@ -589,6 +600,7 @@
         if (storedP) padron = JSON.parse(storedP);
       } catch (e) { }
 
+      let padronTotal = 0;
       if (padron && padron.length > 0) {
         let sumContrib = 0, sumCirc = 0, sumAseo = 0;
         padron.forEach(c => {
@@ -596,25 +608,29 @@
           sumCirc += parseInt(c.aporte_circulacion) || 0;
           sumAseo += parseInt(c.aporte_aseo) || 0;
         });
-        // Actualizar los ítems de recaudación dinámicamente
+        padronTotal = sumContrib + sumCirc + sumAseo;
+        
+        // Actualizar los ítems de recaudación dinámicamente y hacer que el total sea SOLO el padrón (por requerimiento del demo)
+        recItems = [
+          { "nombre": "Impuesto Territorial", "monto": sumContrib, "porcentaje": 0 },
+          { "nombre": "Permisos de Circulación", "monto": sumCirc, "porcentaje": 0 },
+          { "nombre": "Derechos de Aseo", "monto": sumAseo, "porcentaje": 0 }
+        ];
+        totalVecinos = padronTotal;
+        totalFCM = 0;
+        totalOtros = 0;
+      } else {
         recItems.forEach(it => {
           const n = it.nombre.toLowerCase();
-          if (n.includes('contribucion') || n.includes('territorial')) { it.monto = sumContrib; }
-          else if (n.includes('circulacion')) { it.monto = sumCirc; }
-          else if (n.includes('aseo')) { it.monto = sumAseo; }
+          if (n.includes('contribucion') || n.includes('circulacion') || n.includes('aseo') || n.includes('patente') || n.includes('territorial')) {
+            totalVecinos += it.monto;
+          } else if (n.includes('fondo comun') || n.includes('fcm')) {
+            totalFCM += it.monto;
+          } else {
+            totalOtros += it.monto;
+          }
         });
       }
-
-      recItems.forEach(it => {
-        const n = it.nombre.toLowerCase();
-        if (n.includes('contribucion') || n.includes('circulacion') || n.includes('aseo') || n.includes('patente') || n.includes('territorial')) {
-          totalVecinos += it.monto;
-        } else if (n.includes('fondo comun') || n.includes('fcm')) {
-          totalFCM += it.monto;
-        } else {
-          totalOtros += it.monto;
-        }
-      });
 
       const sumTotal = totalVecinos + totalFCM + totalOtros;
 
@@ -628,15 +644,26 @@
       // Fill Context Card (Option 2)
       const lblPorcentaje = document.getElementById('lblPorcentajeVecinos');
       const lblPresupuesto = document.getElementById('lblPresupuestoTotal');
-      if (lblPorcentaje) lblPorcentaje.textContent = ptcVecinos + '%';
+      
+      const annualUserTotal = userData['2025'].contrib + userData['2025'].circ + userData['2025'].aseo;
+      const userPtc = sumTotal > 0 ? ((annualUserTotal / sumTotal) * 100).toFixed(1) : 0;
+      
+      if (lblPorcentaje) lblPorcentaje.textContent = userPtc + '%';
       if (lblPresupuesto) lblPresupuesto.textContent = fmt(sumTotal);
 
       // Render Doughnut y Tabla (Opción 1)
-      const origenData = [
-        { label: 'Aportes de Vecinos (Ingresos Propios)', percent: parseFloat(ptcVecinos), color: '#F77F00', monto: totalVecinos },
-        { label: 'Fondo Común Municipal (FCM)', percent: parseFloat(sumTotal > 0 ? ((totalFCM / sumTotal) * 100).toFixed(1) : 0), color: '#006FB3', monto: totalFCM },
-        { label: 'Otras Transferencias / Ingresos', percent: parseFloat(sumTotal > 0 ? ((totalOtros / sumTotal) * 100).toFixed(1) : 0), color: '#52B788', monto: totalOtros }
-      ];
+      let origenData = [];
+      if (padron && padron.length > 0) {
+         origenData = [
+           { label: 'Aportes de Vecinos (Padrón Demo)', percent: 100, color: '#F77F00', monto: padronTotal }
+         ];
+      } else {
+         origenData = [
+           { label: 'Aportes de Vecinos (Ingresos Propios)', percent: parseFloat(ptcVecinos), color: '#F77F00', monto: totalVecinos },
+           { label: 'Fondo Común Municipal (FCM)', percent: parseFloat(sumTotal > 0 ? ((totalFCM / sumTotal) * 100).toFixed(1) : 0), color: '#006FB3', monto: totalFCM },
+           { label: 'Otras Transferencias / Ingresos', percent: parseFloat(sumTotal > 0 ? ((totalOtros / sumTotal) * 100).toFixed(1) : 0), color: '#52B788', monto: totalOtros }
+         ];
+      }
       const donutCont = document.getElementById('donutOrigenFondos');
       if (donutCont) {
         App.renderDonut('donutOrigenFondos', origenData.map(d => ({ percent: d.percent, color: d.color })));

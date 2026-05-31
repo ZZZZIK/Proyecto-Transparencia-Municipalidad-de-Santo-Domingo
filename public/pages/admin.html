@@ -281,6 +281,7 @@
           <option value="proyectos">🏗️ Proyectos Municipales</option>
           <option value="servicios">🔧 Servicios Contratados</option>
           <option value="metadata">📋 Metadata General (período fiscal)</option>
+          <option value="contribuyentes">👤 Contribuyentes (Aportes Vecinos)</option>
         </select>
         <button class="plantilla-btn" id="btnPlantilla" onclick="descargarPlantilla()" disabled>
           <span class="material-icons">download</span> Descargar Plantilla CSV
@@ -452,7 +453,8 @@
       'gastos': 'Gastos por Área',
       'proyectos': 'Proyectos',
       'servicios': 'Servicios Contratados',
-      'metadata': 'Metadata General'
+      'metadata': 'Metadata General',
+      'contribuyentes': 'Contribuyentes'
     };
 
     // Columnas requeridas por tipo de carga (debe coincidir con el backend)
@@ -461,7 +463,8 @@
       'gastos': ['area', 'icono', 'color', 'monto_asignado', 'porcentaje', 'descripcion'],
       'proyectos': ['codigo', 'nombre', 'area', 'monto', 'porcentaje', 'estado'],
       'servicios': ['servicio', 'proveedor', 'monto', 'porcentaje'],
-      'metadata': ['ultima_actualizacion', 'fuente', 'periodo_informado', 'recaudacion_total', 'gasto_total', 'poblacion_comuna']
+      'metadata': ['ultima_actualizacion', 'fuente', 'periodo_informado', 'recaudacion_total', 'gasto_total', 'poblacion_comuna'],
+      'contribuyentes': ['rut', 'nombre', 'aporte_contribucion', 'aporte_circulacion', 'aporte_aseo']
     };
 
     let allPeriods = [];
@@ -856,9 +859,69 @@
             tipo_carga: tipo,
             nombre_archivo: currentFile ? currentFile.name : 'archivo.csv',
             registros_procesados: parsedRows.length,
+            registros_insertados: parsedRows.length,
             estado: 'offline'
           });
           localStorage.setItem('transparencia_historial_offline', JSON.stringify(offlineHistory));
+
+          // === Propagación en cascada para contribuyentes (modo offline) ===
+          if (tipo === 'contribuyentes') {
+            // Recalcular los ítems de recaudación basados en la suma de todos los contribuyentes
+            let sumContrib = 0, sumCirc = 0, sumAseo = 0;
+            parsedRows.forEach(c => {
+              sumContrib += parseInt(c.aporte_contribucion) || 0;
+              sumCirc += parseInt(c.aporte_circulacion) || 0;
+              sumAseo += parseInt(c.aporte_aseo) || 0;
+            });
+
+            // Leer recaudación existente o crear por defecto
+            let recItems = [];
+            try {
+              const storedRec = localStorage.getItem('transparencia_carga_recaudacion');
+              if (storedRec) recItems = JSON.parse(storedRec);
+            } catch(e) {}
+
+            if (recItems.length === 0) {
+              // Crear ítems por defecto basados en datos semilla (solo aportes vecinos para el demo)
+              recItems = [
+                { nombre: 'Impuesto Territorial', monto: 0, porcentaje: 0 },
+                { nombre: 'Permisos de Circulación', monto: 0, porcentaje: 0 },
+                { nombre: 'Derechos de Aseo', monto: 0, porcentaje: 0 }
+              ];
+            }
+
+            // Actualizar los ítems que corresponden a contribuciones de vecinos
+            recItems.forEach(it => {
+              const n = it.nombre.toLowerCase();
+              if (n.includes('territorial') || n.includes('contribucion')) it.monto = sumContrib;
+              else if (n.includes('circulacion') || n.includes('circulación')) it.monto = sumCirc;
+              else if (n.includes('aseo')) it.monto = sumAseo;
+            });
+
+            // Recalcular total y porcentajes
+            const nuevoTotal = recItems.reduce((s, it) => s + (parseInt(it.monto) || 0), 0);
+            recItems.forEach(it => {
+              it.porcentaje = nuevoTotal > 0 ? parseFloat(((parseInt(it.monto) / nuevoTotal) * 100).toFixed(2)) : 0;
+            });
+
+            // Guardar recaudación actualizada
+            localStorage.setItem('transparencia_carga_recaudacion', JSON.stringify(recItems));
+
+            // Actualizar metadata con el nuevo total
+            let metaArr = [];
+            try {
+              const storedMeta = localStorage.getItem('transparencia_carga_metadata');
+              if (storedMeta) metaArr = JSON.parse(storedMeta);
+            } catch(e) {}
+            if (metaArr.length > 0) {
+              metaArr[0].recaudacion_total = nuevoTotal;
+            } else {
+              metaArr = [{ ultima_actualizacion: new Date().toISOString().split('T')[0], fuente: 'Dirección de Control y Finanzas', periodo_informado: 'Año Fiscal 2025', recaudacion_total: nuevoTotal, gasto_total: 11920000000, poblacion_comuna: 9800 }];
+            }
+            localStorage.setItem('transparencia_carga_metadata', JSON.stringify(metaArr));
+
+            logAction(`<span style="color:#22c55e">Propagación en cascada completada: recaudación actualizada a ${App.formatCLP(nuevoTotal)} con ${parsedRows.length} contribuyentes.</span>`);
+          }
 
           showResult('success', {
             mensaje: 'Datos guardados localmente (modo offline). Se sincronizarán cuando el servidor esté disponible.',

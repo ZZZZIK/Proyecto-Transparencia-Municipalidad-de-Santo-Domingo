@@ -320,8 +320,8 @@
         spinner.style.display = 'block';
         btnText.textContent = 'Verificando...';
 
-        const rut = rutInput.value;
-        const password = passwordInput.value;
+        const rut = rutInput.value.trim();
+        const password = passwordInput.value.trim();
 
         const showError = (msg) => {
           alertText.textContent = msg;
@@ -378,40 +378,39 @@
 
           console.warn("Iniciando simulación local segura (Graceful Fallback)...");
           
-          // Leer la Recaudación Global para derivar los aportes proporcionalmente
-          let globalContrib = 1850000000, globalCirc = 1200000000, globalAseo = 950000000;
+          // === Leer padrón de contribuyentes subido desde el admin ===
+          let padronLocal = [];
           try {
-            const storedR = localStorage.getItem('transparencia_carga_recaudacion');
-            if (storedR) {
-              const rec = JSON.parse(storedR);
-              globalContrib = 0; globalCirc = 0; globalAseo = 0;
-              rec.forEach(it => {
-                const n = (it.nombre || '').toLowerCase();
-                const m = parseInt(it.monto) || 0;
-                if (n.includes('contribucion') || n.includes('territorial')) globalContrib += m;
-                else if (n.includes('circulacion')) globalCirc += m;
-                else if (n.includes('aseo')) globalAseo += m;
-              });
-            }
+            const storedP = localStorage.getItem('transparencia_carga_contribuyentes');
+            if (storedP) padronLocal = JSON.parse(storedP);
           } catch(e) {}
 
-          const poblacion = 9800; // Según metadata estándar de prueba
-          const promContrib = Math.round(globalContrib / poblacion);
-          const promCirc = Math.round(globalCirc / poblacion);
-          const promAseo = Math.round(globalAseo / poblacion);
+          // Helper: buscar contribuyente en el padrón local por RUT limpio
+          function findInPadron(cleanRutTarget) {
+            return padronLocal.find(c => {
+              const cRut = (c.rut || '').replace(/[^0-9kK]/g, '').toLowerCase();
+              return cRut === cleanRutTarget;
+            });
+          }
 
           if (cleanRut === '123456789' && password === 'Pb_123@01') {
-            // Usuario A: Alonso (Perfil Promedio: 1x)
-            const aCont = promContrib;
-            const aCirc = promCirc;
-            const aAseo = promAseo;
+            // Usuario A: Alonso
+            const padronEntry = findInPadron('123456789');
+            let aCont, aCirc, aAseo;
+            if (padronEntry) {
+              aCont = parseInt(padronEntry.aporte_contribucion) || 0;
+              aCirc = parseInt(padronEntry.aporte_circulacion) || 0;
+              aAseo = parseInt(padronEntry.aporte_aseo) || 0;
+            } else {
+              aCont = 485000; aCirc = 165000; aAseo = 78000;
+            }
             const total = aCont + aCirc + aAseo;
             const mes = Math.round(total / 12);
 
             sessionData = {
               token: 'offline_token_a_12345',
               user: {
-                nombre: 'Alonso Alexander Maurel Murgas',
+                nombre: padronEntry ? padronEntry.nombre : 'Alonso Alexander Maurel Murgas',
                 rut: '12.345.678-9',
                 rol: 'ciudadano',
                 recaudacionTotalUsuario: total,
@@ -420,17 +419,23 @@
               }
             };
           } else if (cleanRut === '892342554' && password === 'Pb_321@02') {
-            // Usuario B: Sofía (Perfil Alto Contribuyente: 3x)
-            const aCont = promContrib * 3;
-            const aCirc = promCirc * 3;
-            const aAseo = promAseo * 3;
+            // Usuario B: Sofía
+            const padronEntry = findInPadron('892342554');
+            let aCont, aCirc, aAseo;
+            if (padronEntry) {
+              aCont = parseInt(padronEntry.aporte_contribucion) || 0;
+              aCirc = parseInt(padronEntry.aporte_circulacion) || 0;
+              aAseo = parseInt(padronEntry.aporte_aseo) || 0;
+            } else {
+              aCont = 1400000; aCirc = 500000; aAseo = 100000;
+            }
             const total = aCont + aCirc + aAseo;
             const mes = Math.round(total / 12);
 
             sessionData = {
               token: 'offline_token_b_67890',
               user: {
-                nombre: 'Sofía Elizabeth Álvarez Pérez',
+                nombre: padronEntry ? padronEntry.nombre : 'Sofía Elizabeth Álvarez Pérez',
                 rut: '89.234.255-4',
                 rol: 'ciudadano',
                 recaudacionTotalUsuario: total,

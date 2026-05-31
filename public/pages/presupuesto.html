@@ -79,20 +79,54 @@
         });
       } else {
         baseItems = [
-          {area:'Educación',asignado:3576000000,ejecutado:3312000000,pctEjec:92.6},
-          {area:'Salud',asignado:2384000000,ejecutado:2265000000,pctEjec:95.0},
-          {area:'Seguridad Ciudadana',asignado:1430000000,ejecutado:1358000000,pctEjec:95.0},
-          {area:'Obras Municipales',asignado:1192000000,ejecutado:1048000000,pctEjec:87.9},
-          {area:'Servicios Comunitarios',asignado:952000000,ejecutado:895000000,pctEjec:94.0},
-          {area:'Medio Ambiente',asignado:714000000,ejecutado:678000000,pctEjec:95.0},
-          {area:'Cultura y Deporte',asignado:595000000,ejecutado:535000000,pctEjec:89.9},
-          {area:'Administración',asignado:1077000000,ejecutado:829000000,pctEjec:77.0}
+          {area:'Educación',asignado:818400,ejecutado:757838,pctEjec:92.6},
+          {area:'Salud',asignado:545600,ejecutado:518320,pctEjec:95.0},
+          {area:'Seguridad Ciudadana',asignado:327360,ejecutado:310992,pctEjec:95.0},
+          {area:'Obras Municipales',asignado:272800,ejecutado:239791,pctEjec:87.9},
+          {area:'Servicios Comunitarios',asignado:218240,ejecutado:205145,pctEjec:94.0},
+          {area:'Medio Ambiente',asignado:163680,ejecutado:155496,pctEjec:95.0},
+          {area:'Cultura y Deporte',asignado:136400,ejecutado:122623,pctEjec:89.9},
+          {area:'Administración',asignado:245520,ejecutado:189050,pctEjec:77.0}
         ];
       }
     }
     const multipliers = {'2026':1.05,'2025':1,'2024':0.93,'2023':0.86};
     const colors = ['#2E86AB','#E8433E','#1B4332','#F77F00','#7209B7','#52B788','#E09F3E','#6C757D'];
-    const fmt = v => '$'+(v>=1e9?(v/1e9).toFixed(3)+'M': v>=1e6?(v/1e6).toFixed(0)+'M': new Intl.NumberFormat('es-CL').format(v));
+    const fmt = v => '$' + new Intl.NumberFormat('es-CL').format(v);
+
+    // === Recalcular ingresos totales desde contribuyentes + recaudación ===
+    let recaudacionTotalOverride = null;
+    try {
+      // Leer recaudación actualizada (puede venir de cascada de contribuyentes)
+      const storedRec = localStorage.getItem('transparencia_carga_recaudacion');
+      const storedPadron = localStorage.getItem('transparencia_carga_contribuyentes');
+      
+      // Regla de coherencia para el DEMO: Si existe el padrón, el presupuesto total ES la suma del padrón.
+      if (storedPadron) {
+        const padron = JSON.parse(storedPadron);
+        if (padron && padron.length > 0) {
+          let pTotal = 0;
+          padron.forEach(c => {
+            pTotal += (parseInt(c.aporte_contribucion) || 0) + (parseInt(c.aporte_circulacion) || 0) + (parseInt(c.aporte_aseo) || 0);
+          });
+          recaudacionTotalOverride = pTotal;
+        }
+      } else if (storedRec) {
+        const recItems = JSON.parse(storedRec);
+        recaudacionTotalOverride = recItems.reduce((s, it) => s + (parseInt(it.monto) || 0), 0);
+      }
+      
+      // O leer de metadata directamente
+      if (!recaudacionTotalOverride) {
+        const storedMeta = localStorage.getItem('transparencia_carga_metadata');
+        if (storedMeta) {
+          const meta = JSON.parse(storedMeta)[0];
+          if (meta && meta.recaudacion_total) {
+            recaudacionTotalOverride = parseInt(meta.recaudacion_total);
+          }
+        }
+      }
+    } catch(e) {}
 
     function updateDropdownsDisabledState() {
       const selectAnio = document.getElementById('filterAnio');
@@ -153,8 +187,10 @@
       const items = baseItems.map(it => ({
         area:it.area, asignado:Math.round(it.asignado*mult/div), ejecutado:Math.round(it.ejecutado*mult/div), pctEjec:it.pctEjec
       }));
-      const totI = items.reduce((s,i)=>s+i.asignado,0);
+      const totI_base = items.reduce((s,i)=>s+i.asignado,0);
       const totG = items.reduce((s,i)=>s+i.ejecutado,0);
+      // Usar recaudación recalculada desde contribuyentes si está disponible (año base 2025, anual)
+      const totI = (recaudacionTotalOverride && anio === '2025' && mes === 'anual') ? recaudacionTotalOverride : totI_base;
       document.getElementById('sIngresos').textContent = fmt(totI);
       document.getElementById('sGastos').textContent = fmt(totG);
       document.getElementById('sSuperavit').textContent = fmt(totI-totG);

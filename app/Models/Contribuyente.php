@@ -22,6 +22,8 @@ class Contribuyente extends Model
         'rut_hash',
         'rut_encriptado',
         'nombre_encriptado',
+        'password_hash',
+        'rol',
         'aporte_contribucion',
         'aporte_circulacion',
         'aporte_aseo',

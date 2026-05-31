@@ -353,9 +353,9 @@ class ApiController extends Controller
                         'nombre' => 'Sofía Elizabeth Álvarez Pérez',
                         'rut' => '89.234.255-4',
                         'rol' => 'ciudadano',
-                        'recaudacionTotalUsuario' => 5000000,
-                        'detalles' => ['contribucion' => 3500000, 'circulacion' => 1200000, 'aseo' => 300000],
-                        'mensual' => [400000,420000,410000,430000,420000,410000,420000,430000,410000,420000,410000,420000]
+                        'recaudacionTotalUsuario' => 2000000,
+                        'detalles' => ['contribucion' => 1400000, 'circulacion' => 500000, 'aseo' => 100000],
+                        'mensual' => [160000,160000,170000,170000,180000,160000,160000,170000,170000,160000,170000,170000]
                     ]
                 ]);
             } elseif ($cleanRut === '87654321' && $password === 'Pb_123@03') {
@@ -439,11 +439,12 @@ class ApiController extends Controller
     private function getRequiredColumns($tipo)
     {
         $schemas = [
-            'recaudacion' => ['nombre', 'monto', 'porcentaje'],
-            'gastos'      => ['area', 'icono', 'color', 'monto_asignado', 'porcentaje', 'descripcion'],
-            'proyectos'   => ['codigo', 'nombre', 'area', 'monto', 'porcentaje', 'estado'],
-            'servicios'   => ['servicio', 'proveedor', 'monto', 'porcentaje'],
-            'metadata'    => ['ultima_actualizacion', 'fuente', 'periodo_informado', 'recaudacion_total', 'gasto_total', 'poblacion_comuna'],
+            'recaudacion'     => ['nombre', 'monto', 'porcentaje'],
+            'gastos'          => ['area', 'icono', 'color', 'monto_asignado', 'porcentaje', 'descripcion'],
+            'proyectos'       => ['codigo', 'nombre', 'area', 'monto', 'porcentaje', 'estado'],
+            'servicios'       => ['servicio', 'proveedor', 'monto', 'porcentaje'],
+            'metadata'        => ['ultima_actualizacion', 'fuente', 'periodo_informado', 'recaudacion_total', 'gasto_total', 'poblacion_comuna'],
+            'contribuyentes'  => ['rut', 'nombre', 'aporte_contribucion', 'aporte_circulacion', 'aporte_aseo'],
         ];
         return $schemas[$tipo] ?? null;
     }
@@ -464,7 +465,7 @@ class ApiController extends Controller
         try {
             $request->validate([
                 'archivo'       => 'required|file|mimes:csv,txt|max:5120',
-                'tipo_carga'    => 'required|string|in:recaudacion,gastos,proyectos,servicios,metadata',
+                'tipo_carga'    => 'required|string|in:recaudacion,gastos,proyectos,servicios,metadata,contribuyentes',
                 'admin_rut_hash' => 'required|string|size:64',
             ]);
         } catch (\Illuminate\Validation\ValidationException $ve) {
@@ -645,6 +646,107 @@ class ApiController extends Controller
                         $registrosInsertados = 1;
                     }
                     break;
+
+                case 'contribuyentes':
+                    // Upsert contribuyentes: actualizar aportes SIN tocar credenciales
+                    foreach ($rows as $row) {
+                        $rutClean = strtolower(str_replace(['.', '-', ' '], '', $row['rut']));
+                        $rutHash = hash('sha256', $rutClean);
+
+                        $existing = DB::table('contribuyentes')->where('rut_hash', $rutHash)->first();
+
+                        $totalAporte = (int) $row['aporte_contribucion'] + (int) $row['aporte_circulacion'] + (int) $row['aporte_aseo'];
+                        $mensual = $totalAporte > 0 ? round($totalAporte / 12) : 0;
+                        $valoresMensuales = json_encode(array_fill(0, 12, round($totalAporte / 12)));
+
+                        if ($existing) {
+                            // Actualizar SOLO aportes — NO tocar password_hash ni rol
+                            $updateData = [
+                                'aporte_contribucion' => (int) $row['aporte_contribucion'],
+                                'aporte_circulacion'  => (int) $row['aporte_circulacion'],
+                                'aporte_aseo'         => (int) $row['aporte_aseo'],
+                                'valores_mensuales'   => $valoresMensuales,
+                            ];
+                            // Actualizar nombre encriptado si el modelo usa casts
+                            try {
+                                $contrib = Contribuyente::where('rut_hash', $rutHash)->first();
+                                if ($contrib) {
+                                    $contrib->nombre_encriptado = $row['nombre'];
+                                    $contrib->aporte_contribucion = (int) $row['aporte_contribucion'];
+                                    $contrib->aporte_circulacion = (int) $row['aporte_circulacion'];
+                                    $contrib->aporte_aseo = (int) $row['aporte_aseo'];
+                                    $contrib->valores_mensuales = array_fill(0, 12, round($totalAporte / 12));
+                                    $contrib->save();
+                                }
+                            } catch (\Exception $modelEx) {
+                                // Fallback: raw update sin encriptación
+                                DB::table('contribuyentes')->where('rut_hash', $rutHash)->update($updateData);
+                            }
+                            $registrosActualizados++;
+                        } else {
+                            // Insertar nuevo contribuyente con contraseña por defecto
+                            try {
+                                $contrib = new Contribuyente();
+                                $contrib->rut_hash = $rutHash;
+                                $contrib->rut_encriptado = $row['rut'];
+                                $contrib->nombre_encriptado = $row['nombre'];
+                                $contrib->password_hash = \Illuminate\Support\Facades\Hash::make('Contribuyente@123');
+                                $contrib->rol = 'ciudadano';
+                                $contrib->aporte_contribucion = (int) $row['aporte_contribucion'];
+                                $contrib->aporte_circulacion = (int) $row['aporte_circulacion'];
+                                $contrib->aporte_aseo = (int) $row['aporte_aseo'];
+                                $contrib->valores_mensuales = array_fill(0, 12, round($totalAporte / 12));
+                                $contrib->save();
+                            } catch (\Exception $modelEx) {
+                                DB::table('contribuyentes')->insert([
+                                    'rut_hash'            => $rutHash,
+                                    'rut_encriptado'      => $row['rut'],
+                                    'nombre_encriptado'   => $row['nombre'],
+                                    'password_hash'       => \Illuminate\Support\Facades\Hash::make('Contribuyente@123'),
+                                    'rol'                 => 'ciudadano',
+                                    'aporte_contribucion' => (int) $row['aporte_contribucion'],
+                                    'aporte_circulacion'  => (int) $row['aporte_circulacion'],
+                                    'aporte_aseo'         => (int) $row['aporte_aseo'],
+                                    'valores_mensuales'   => $valoresMensuales,
+                                ]);
+                            }
+                            $registrosInsertados++;
+                        }
+                    }
+
+                    // === Propagación en cascada: recalcular recaudación ===
+                    $sumContrib = DB::table('contribuyentes')->where('rol', 'ciudadano')->sum('aporte_contribucion');
+                    $sumCirc    = DB::table('contribuyentes')->where('rol', 'ciudadano')->sum('aporte_circulacion');
+                    $sumAseo    = DB::table('contribuyentes')->where('rol', 'ciudadano')->sum('aporte_aseo');
+
+                    // Actualizar ítems de recaudación
+                    DB::table('recaudacion_items')->where('nombre', 'Impuesto Territorial')->update([
+                        'monto' => $sumContrib,
+                    ]);
+                    DB::table('recaudacion_items')->where('nombre', 'Permisos de Circulación')->update([
+                        'monto' => $sumCirc,
+                    ]);
+                    DB::table('recaudacion_items')->where('nombre', 'Derechos de Aseo')->update([
+                        'monto' => $sumAseo,
+                    ]);
+
+                    // Recalcular recaudación total y porcentajes
+                    $newRecTotal = DB::table('recaudacion_items')->sum('monto');
+                    if ($newRecTotal > 0) {
+                        $allRecItems = DB::table('recaudacion_items')->get();
+                        foreach ($allRecItems as $item) {
+                            DB::table('recaudacion_items')->where('id', $item->id)->update([
+                                'porcentaje' => round(($item->monto / $newRecTotal) * 100, 2),
+                            ]);
+                        }
+                    }
+
+                    // Actualizar metadata
+                    DB::table('metadata')->where('id', 1)->update([
+                        'recaudacion_total' => $newRecTotal,
+                    ]);
+
+                    break;
             }
 
             // 5. Registrar en tabla de auditoría
@@ -750,6 +852,10 @@ class ApiController extends Controller
                 'headers' => ['ultima_actualizacion', 'fuente', 'periodo_informado', 'recaudacion_total', 'gasto_total', 'poblacion_comuna'],
                 'ejemplo' => ['2026-03-31', 'Dirección de Control y Finanzas', 'Año Fiscal 2025', '12850000000', '11920000000', '9800'],
             ],
+            'contribuyentes' => [
+                'headers' => ['rut', 'nombre', 'aporte_contribucion', 'aporte_circulacion', 'aporte_aseo'],
+                'ejemplo' => ['12.345.678-9', 'Alonso Alexander Maurel Murgas', '485000', '165000', '78000'],
+            ],
         ];
 
         if (!isset($plantillas[$tipo])) {
@@ -765,6 +871,38 @@ class ApiController extends Controller
             'Content-Type'        => 'text/csv; charset=UTF-8',
             'Content-Disposition' => "attachment; filename=plantilla_{$tipo}.csv",
         ]);
+    }
+
+    /**
+     * Obtener resumen de contribuciones totales de todos los vecinos.
+     * Usado por el frontend para mostrar el total de contribuciones en el presupuesto municipal.
+     */
+    public function getResumenContribuyentes()
+    {
+        try {
+            $sumContrib = DB::table('contribuyentes')->where('rol', 'ciudadano')->sum('aporte_contribucion');
+            $sumCirc    = DB::table('contribuyentes')->where('rol', 'ciudadano')->sum('aporte_circulacion');
+            $sumAseo    = DB::table('contribuyentes')->where('rol', 'ciudadano')->sum('aporte_aseo');
+            $totalVecinos = $sumContrib + $sumCirc + $sumAseo;
+            $cantidadContribuyentes = DB::table('contribuyentes')->where('rol', 'ciudadano')->count();
+
+            return response()->json([
+                'aporte_contribucion_total' => (int) $sumContrib,
+                'aporte_circulacion_total'  => (int) $sumCirc,
+                'aporte_aseo_total'         => (int) $sumAseo,
+                'total_vecinos'             => (int) $totalVecinos,
+                'cantidad_contribuyentes'   => $cantidadContribuyentes,
+            ]);
+        } catch (\Exception $e) {
+            Log::warning("getResumenContribuyentes - Error: " . $e->getMessage());
+            return response()->json([
+                'aporte_contribucion_total' => 0,
+                'aporte_circulacion_total'  => 0,
+                'aporte_aseo_total'         => 0,
+                'total_vecinos'             => 0,
+                'cantidad_contribuyentes'   => 0,
+            ]);
+        }
     }
 }
 
