@@ -13,7 +13,24 @@ const App = {
   getUserSession() {
     try {
       const sess = sessionStorage.getItem('transparencia_session');
-      return sess ? JSON.parse(sess) : null;
+      if (!sess) return null;
+      
+      const data = JSON.parse(sess);
+      
+      // Control de expiración por inactividad (ISO 27001 Compliance)
+      // Tiempo límite: 15 minutos (900.000 ms)
+      const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
+      if (data.timestamp && (Date.now() - data.timestamp > SESSION_TIMEOUT_MS)) {
+        console.warn("Sesión expirada por inactividad prolongada (Seguridad ISO 27001).");
+        this.logout();
+        return null;
+      }
+      
+      // Renovar la marca de tiempo tras una actividad exitosa del usuario
+      data.timestamp = Date.now();
+      sessionStorage.setItem('transparencia_session', JSON.stringify(data));
+      
+      return data;
     } catch (e) {
       return null;
     }
@@ -250,8 +267,13 @@ const App = {
 
         if (document.getElementById('nav-admin-link')) return;
 
-        const mainNavList = navCollapse.querySelector('ul.navbar-nav.mr-auto') || navCollapse.querySelector('ul.navbar-nav');
-        if (mainNavList) {
+        // Buscar el contenedor de la derecha (donde está Cerrar Sesión)
+        const navLists = navCollapse.querySelectorAll('ul.navbar-nav');
+        const rightNavList = navLists[navLists.length - 1];
+        if (rightNavList) {
+          // Si ya existe el link a admin de forma estática en la lista de la derecha (como en admin.html), salir
+          if (rightNavList.querySelector('a[href*="admin.html"]')) return;
+
           const li = document.createElement('li');
           li.className = 'nav-item';
           li.id = 'nav-admin-link';
@@ -260,11 +282,12 @@ const App = {
           const href = path.includes('/pages/') ? 'admin.html' : 'pages/admin.html';
           
           li.innerHTML = `
-            <a class="nav-link" href="${href}" style="font-weight:700;color:#38bdf8 !important;">
-              <span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">admin_panel_settings</span> Administración
+            <a class="nav-link" href="${href}" style="font-weight:700;color:#38bdf8 !important;display:inline-flex;align-items:center;margin-right:15px;">
+              <span class="material-icons mr-1" style="font-size:16px;vertical-align:middle;color:#38bdf8 !important;">admin_panel_settings</span> Administración
             </a>
           `;
-          mainNavList.appendChild(li);
+          // Insertar al inicio de la lista de la derecha (antes del usuario o botón de cerrar sesión)
+          rightNavList.insertBefore(li, rightNavList.firstChild);
         }
       }
     } catch (e) {

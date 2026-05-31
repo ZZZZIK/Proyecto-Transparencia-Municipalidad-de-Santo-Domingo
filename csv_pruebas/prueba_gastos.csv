@@ -1,0 +1,9 @@
+area,icono,color,monto_asignado,porcentaje,descripcion
+"Educación",school,#2E86AB,$3.800.000.000,30.00,"Escuelas y liceos de la comuna"
+"Salud",local_hospital,#E8433E,2500000000,20.00,"Atención primaria y CESFAM"
+"Seguridad Ciudadana",shield,#1B4332,"$1.600.000.000",12.00,"Vigilancia y patrullaje comunal"
+"Obras Municipales",construction,#F77F00,1250000000,10.00,"Infraestructura pública y vial"
+"Servicios Comunitarios",groups,#7209B7,$1.000.000.000,8.00,"Ayudas y programas sociales"
+"Medio Ambiente",eco,#52B788,750000000,6.00,"Aseo y ornato comunal"
+"Cultura y Deporte",sports_soccer,#E09F3E,650000000,5.00,"Actividades deportivas y talleres"
+"Administración",account_balance,#6C757D,$1.150.000.000,9.00,"Gestión interna municipal"

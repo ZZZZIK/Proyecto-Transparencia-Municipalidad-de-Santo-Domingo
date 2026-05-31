@@ -807,8 +807,8 @@ html.a11y-readable * {
 /* --- High Contrast Mode (Kit Digital: html.a11y-contrast) --- */
 html.a11y-contrast body,
 body.high-contrast {
-  background: #000;
-  color: #fff;
+  background: #000 !important;
+  color: #fff !important;
 }
 html.a11y-contrast .mosaic-card,
 html.a11y-contrast .stat-card,
@@ -820,14 +820,72 @@ body.high-contrast .stat-card,
 body.high-contrast .info-card,
 body.high-contrast .table-container,
 body.high-contrast .filter-panel {
-  background: #1a1a1a;
-  border-color: #444;
-  color: #fff;
+  background: #1a1a1a !important;
+  border-color: #fff !important;
+  color: #fff !important;
 }
 html.a11y-contrast .dynamic-table tbody td,
-body.high-contrast .dynamic-table tbody td { color: #ddd; }
+body.high-contrast .dynamic-table tbody td { color: #ddd !important; }
 html.a11y-contrast .header-institucional,
-body.high-contrast .header-institucional { background: #111; }
+body.high-contrast .header-institucional { background: #111 !important; }
+
+html.a11y-contrast a,
+body.high-contrast a {
+  color: #00ff00 !important; /* Verde de alta visibilidad */
+  text-decoration: underline !important;
+}
+
+html.a11y-contrast .nav-main,
+body.high-contrast .nav-main {
+  background: #111 !important;
+  border-bottom: 2px solid #fff !important;
+}
+
+html.a11y-contrast .nav-main .nav-link,
+body.high-contrast .nav-main .nav-link {
+  color: #fff !important;
+}
+
+html.a11y-contrast .nav-main .nav-link.active,
+body.high-contrast .nav-main .nav-link.active {
+  background: #333 !important;
+  border-bottom-color: #ffff00 !important;
+}
+
+html.a11y-contrast .stat-card .stat-value,
+body.high-contrast .stat-card .stat-value {
+  color: #ffff00 !important; /* Amarillo de alta visibilidad para valores */
+}
+
+html.a11y-contrast .stat-card .stat-label,
+body.high-contrast .stat-card .stat-label {
+  color: #fff !important; /* Blanco puro para evitar contraste insuficiente */
+}
+
+html.a11y-contrast select.form-control,
+body.high-contrast select.form-control,
+html.a11y-contrast input.form-control,
+body.high-contrast input.form-control,
+html.a11y-contrast select.form-control-sm,
+body.high-contrast select.form-control-sm,
+html.a11y-contrast input.search-input,
+body.high-contrast input.search-input {
+  background: #000 !important;
+  color: #fff !important;
+  border-color: #fff !important;
+}
+
+html.a11y-contrast .alert,
+body.high-contrast .alert {
+  background: #2a2a00 !important;
+  color: #ffff00 !important;
+  border: 2px solid #ffff00 !important;
+}
+
+html.a11y-contrast .alert *,
+body.high-contrast .alert * {
+  color: #ffff00 !important;
+}
 
 /* --- Upload Zone (RF11 - Carga de Datos Administrador) --- */
 .upload-section {

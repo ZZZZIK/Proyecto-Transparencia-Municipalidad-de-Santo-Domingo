@@ -3,16 +3,19 @@
     "ultimaActualizacion": "2026-05-30",
     "fuente": "Dirección de Control y Finanzas",
     "periodoInformado": "Año Fiscal 2025",
-    "recaudacionTotal": 2728000,
-    "gastoTotal": 2728000,
-    "poblacionComuna": 2
+    "recaudacionTotal": 38186666667,
+    "gastoTotal": 35131733334,
+    "poblacionComuna": 9800
   },
   "resumenRecaudacion": {
-    "total": 2728000,
+    "total": 38186666667,
     "items": [
-      {"nombre": "Impuesto Territorial", "monto": 1885000, "porcentaje": 69.1},
-      {"nombre": "Permisos de Circulación", "monto": 665000, "porcentaje": 24.4},
-      {"nombre": "Derechos de Aseo", "monto": 178000, "porcentaje": 6.5}
+      {"nombre": "Impuesto Territorial", "monto": 7970000000, "porcentaje": 20.87},
+      {"nombre": "Permisos de Circulación", "monto": 2730000000, "porcentaje": 7.15},
+      {"nombre": "Derechos de Aseo", "monto": 756000000, "porcentaje": 1.98},
+      {"nombre": "Fondo Común Municipal", "monto": 17184000000, "porcentaje": 45.00},
+      {"nombre": "Patentes Municipales", "monto": 5728000000, "porcentaje": 15.00},
+      {"nombre": "Otros Ingresos", "monto": 3818666667, "porcentaje": 10.00}
     ]
   },
   "destinoPorArea": [
@@ -75,17 +78,17 @@
   ],
   "proyeccionesFinancieras": {
     "anioProyectado": 2026,
-    "ingresoProyectado": 13500000000,
-    "gastoProyectado": 12800000000,
+    "ingresoProyectado": 40096000000,
+    "gastoProyectado": 36888320000,
     "proyeccionPorArea": [
-      {"area":"Educación","montoProyectado":3780000000,"variacion":5.7},
-      {"area":"Salud","montoProyectado":2620000000,"variacion":9.9},
-      {"area":"Seguridad","montoProyectado":1510000000,"variacion":5.6},
-      {"area":"Obras","montoProyectado":1350000000,"variacion":13.3},
-      {"area":"Comunitarios","montoProyectado":980000000,"variacion":2.9},
-      {"area":"Medio Ambiente","montoProyectado":750000000,"variacion":5.0},
-      {"area":"Cultura","montoProyectado":620000000,"variacion":4.2},
-      {"area":"Administración","montoProyectado":1190000000,"variacion":10.5}
+      {"area":"Educación","montoProyectado":11118266400,"variacion":5.7},
+      {"area":"Salud","montoProyectado":7719006667,"variacion":9.9},
+      {"area":"Seguridad","montoProyectado":4449710400,"variacion":5.6},
+      {"area":"Obras","montoProyectado":3978023334,"variacion":13.3},
+      {"area":"Comunitarios","montoProyectado":2892823467,"variacion":2.9},
+      {"area":"Medio Ambiente","montoProyectado":2213290000,"variacion":5.0},
+      {"area":"Cultura","montoProyectado":1835577334,"variacion":4.2},
+      {"area":"Administración","montoProyectado":3495252667,"variacion":10.5}
     ]
   }
 }

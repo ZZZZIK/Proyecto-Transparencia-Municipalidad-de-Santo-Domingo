@@ -55,4 +55,5 @@ Route::middleware('throttle:60,1')->group(function () {
     
     // Obtener resumen de contribuciones totales de todos los vecinos
     Route::get('/contribuyentes/resumen', [ApiController::class, 'getResumenContribuyentes']);
+    Route::get('/contribuyentes_resumen', [ApiController::class, 'getResumenContribuyentes']);
 });

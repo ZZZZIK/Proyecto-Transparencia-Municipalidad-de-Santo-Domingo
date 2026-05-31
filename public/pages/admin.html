@@ -472,9 +472,29 @@
     let parsedHeaders = [];
     let parsedRows = [];
 
+    // Helper de escape HTML para mitigar vulnerabilidades DOM XSS (Cumplimiento ISO 27001/27701)
+    function escapeHTML(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // Helper para extraer Cookies de CSRF (Cumplimiento de Integridad de Tokens)
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
+      return null;
+    }
+
     // Log de actividades
     function logAction(msg) {
       const logPanel = document.getElementById('logPanel');
+      if (!logPanel) return;
       const time = new Date().toLocaleTimeString('es-CL', { hour12: false });
       const date = new Date().toLocaleDateString('es-CL');
       const entry = document.createElement('div');
@@ -521,14 +541,14 @@
         const cols = requiredColumnsByType[tipo];
         columnasInfo.style.display = 'flex';
         columnasInfo.innerHTML = `<span style="font-size:0.8rem;color:#64748b;margin-right:8px;font-weight:500">Columnas requeridas:</span>` +
-          cols.map(c => `<span class="col-tag valid"><span class="material-icons">label</span> ${c}</span>`).join('');
+          cols.map(c => `<span class="col-tag valid"><span class="material-icons">label</span> ${escapeHTML(c)}</span>`).join('');
       } else {
         columnasInfo.style.display = 'none';
       }
 
       // Limpiar estado previo si cambia tipo
       removeFile();
-      logAction(`Tipo de carga seleccionado: <strong>${tipoLabels[tipo] || tipo}</strong>.`);
+      logAction(`Tipo de carga seleccionado: <strong>${escapeHTML(tipoLabels[tipo] || tipo)}</strong>.`);
     }
 
     // Descargar plantilla CSV
@@ -536,24 +556,11 @@
       const tipo = document.getElementById('uploadTipo').value;
       if (!tipo) return;
 
-      const baseApi = App.getBaseApiUrl();
-      if (baseApi) {
-        // Descargar desde la API del backend
-        window.open(`${baseApi}/admin/plantilla/${tipo}`, '_blank');
-        logAction(`Plantilla CSV descargada para <strong>${tipoLabels[tipo]}</strong> (desde API).`);
-      } else {
-        // Generar localmente si no hay backend
-        const cols = requiredColumnsByType[tipo];
-        const csv = '\uFEFF' + cols.join(',') + '\n';
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `plantilla_${tipo}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-        logAction(`Plantilla CSV generada localmente para <strong>${tipoLabels[tipo]}</strong>.`);
-      }
+      const a = document.createElement('a');
+      a.href = `../data/plantillas/plantilla_${tipo}.csv`;
+      a.download = `plantilla_${tipo}.csv`;
+      a.click();
+      logAction(`Plantilla CSV descargada para <strong>${escapeHTML(tipoLabels[tipo])}</strong>.`);
     }
 
     // Drag & Drop setup
@@ -579,7 +586,6 @@
         const files = e.dataTransfer.files;
         if (files.length > 0) {
           const fileInput = document.getElementById('fileInput');
-          // Crear nuevo DataTransfer para asignar al input
           const dt = new DataTransfer();
           dt.items.add(files[0]);
           fileInput.files = dt.files;
@@ -632,7 +638,7 @@
       };
       reader.readAsText(file, 'UTF-8');
 
-      logAction(`Archivo seleccionado: <strong>${file.name}</strong> (${formatFileSize(file.size)}).`);
+      logAction(`Archivo seleccionado: <strong>${escapeHTML(file.name)}</strong> (${escapeHTML(formatFileSize(file.size))}).`);
     }
 
     // Formatear tamaño de archivo
@@ -668,11 +674,17 @@
         return;
       }
 
-      // Determinar separador
-      const separator = lines[0].includes(';') ? ';' : ',';
+      // Determinar separador de forma robusta por frecuencia de ocurrencia
+      const countCommas = (lines[0].match(/,/g) || []).length;
+      const countSemicolons = (lines[0].match(/;/g) || []).length;
+      const separator = countSemicolons > countCommas ? ';' : ',';
 
-      // Parsear encabezados
-      parsedHeaders = parseCSVLine(lines[0], separator).map(h => h.toLowerCase().trim().replace(/"/g, ''));
+      if (separator === ';') {
+        logAction(`<span style="color:#f59e0b">Advertencia: Se detectó un separador de punto y coma (;). El servidor espera un archivo delimitado por comas (,). Asegúrese de exportar su CSV con comas como delimitador para evitar errores de carga en el backend.</span>`);
+      }
+
+      // Parsear encabezados (y limpiar posibles puntos y comas residuales al final)
+      parsedHeaders = parseCSVLine(lines[0], separator).map(h => h.toLowerCase().trim().replace(/"/g, '').replace(/;$/, ''));
 
       // Parsear filas
       parsedRows = [];
@@ -680,7 +692,9 @@
         const values = parseCSVLine(lines[i], separator);
         if (values.length >= parsedHeaders.length) {
           const row = {};
-          parsedHeaders.forEach((h, idx) => { row[h] = values[idx] ? values[idx].trim() : ''; });
+          parsedHeaders.forEach((h, idx) => { 
+            row[h] = values[idx] ? values[idx].trim().replace(/;$/, '') : ''; 
+          });
           parsedRows.push(row);
         }
       }
@@ -724,13 +738,13 @@
       previewCount.textContent = parsedRows.length;
       previewCols.textContent = parsedHeaders.length;
 
-      // Header
-      previewHead.innerHTML = '<tr>' + parsedHeaders.map(h => `<th>${h}</th>`).join('') + '</tr>';
+      // Header - Mitigación XSS (escapar campos)
+      previewHead.innerHTML = '<tr>' + parsedHeaders.map(h => `<th>${escapeHTML(h)}</th>`).join('') + '</tr>';
 
-      // Body (max 10 rows)
+      // Body (max 10 rows) - Mitigación XSS (escapar campos)
       const displayRows = parsedRows.slice(0, 10);
       previewBody.innerHTML = displayRows.map(row =>
-        '<tr>' + parsedHeaders.map(h => `<td>${row[h] || ''}</td>`).join('') + '</tr>'
+        '<tr>' + parsedHeaders.map(h => `<td>${escapeHTML(row[h] || '')}</td>`).join('') + '</tr>'
       ).join('');
 
       if (parsedRows.length > 10) {
@@ -744,7 +758,7 @@
       requiredCols.forEach(col => {
         const found = parsedHeaders.includes(col);
         if (!found) allValid = false;
-        colValidation.innerHTML += `<span class="col-tag ${found ? 'valid' : 'invalid'}"><span class="material-icons">${found ? 'check_circle' : 'cancel'}</span> ${col}</span>`;
+        colValidation.innerHTML += `<span class="col-tag ${found ? 'valid' : 'invalid'}"><span class="material-icons">${found ? 'check_circle' : 'cancel'}</span> ${escapeHTML(col)}</span>`;
       });
 
       // Show/hide
@@ -763,9 +777,9 @@
     function showConfirmDialog() {
       const tipo = document.getElementById('uploadTipo').value;
       document.getElementById('confirmMessage').innerHTML =
-        `¿Está seguro de reemplazar los datos de <strong>${tipoLabels[tipo] || tipo}</strong>?<br><br>` +
+        `¿Está seguro de reemplazar los datos de <strong>${escapeHTML(tipoLabels[tipo] || tipo)}</strong>?<br><br>` +
         `Esta acción actualizará la base de datos con <strong>${parsedRows.length} registros</strong> del archivo ` +
-        `<strong>${currentFile ? currentFile.name : ''}</strong>.<br><br>` +
+        `<strong>${currentFile ? escapeHTML(currentFile.name) : ''}</strong>.<br><br>` +
         `Los nuevos datos serán visibles <strong>inmediatamente</strong> para los ciudadanos.`;
       document.getElementById('confirmOverlay').classList.add('active');
     }
@@ -792,7 +806,7 @@
       progressFill.style.width = '30%';
       progressText.textContent = 'Enviando archivo al servidor...';
 
-      logAction(`Iniciando carga de <strong>${tipoLabels[tipo]}</strong> (${parsedRows.length} registros)...`);
+      logAction(`Iniciando carga de <strong>${escapeHTML(tipoLabels[tipo])}</strong> (${parsedRows.length} registros)...`);
 
       try {
         const baseApi = App.getBaseApiUrl();
@@ -810,15 +824,29 @@
         progressFill.style.width = '60%';
         progressText.textContent = 'Procesando datos en el servidor...';
 
+        // Headers con CSRF e Integridad de Sesión conforme a ISO 27001/27701
+        const headers = { 
+          'Accept': 'application/json' 
+        };
+        const xsrfToken = getCookie('XSRF-TOKEN');
+        if (xsrfToken) {
+          headers['X-XSRF-TOKEN'] = xsrfToken;
+        }
+        
+        // Agregar token de sesión administrativa Bearer si existe
+        const sess = JSON.parse(sessionStorage.getItem('transparencia_session') || '{}');
+        if (sess && sess.token) {
+          headers['Authorization'] = `Bearer ${sess.token}`;
+        }
+
         const response = await fetch(`${baseApi}/admin/upload`, {
           method: 'POST',
           body: formData,
-          headers: { 'Accept': 'application/json' }
+          headers: headers
         });
 
         progressFill.style.width = '90%';
 
-        // Verificar si la respuesta es JSON (si no lo es, probablemente estamos en Live Server sin backend PHP)
         const contentType = response.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
           throw new Error('OfflineMode');
@@ -839,7 +867,7 @@
           showResult('success', data);
         }, 500);
 
-        logAction(`<span style="color:#22c55e">✓ Carga exitosa de <strong>${tipoLabels[tipo]}</strong>: ${data.resumen.registros_procesados} registros procesados, ${data.resumen.registros_insertados} insertados.</span>`);
+        logAction(`<span style="color:#22c55e">✓ Carga exitosa de <strong>${escapeHTML(tipoLabels[tipo])}</strong>: ${parseInt(data.resumen.registros_procesados)} registros procesados, ${parseInt(data.resumen.registros_insertados)} insertados.</span>`);
 
         // Recargar historial
         loadUploadHistory();
@@ -864,63 +892,64 @@
           });
           localStorage.setItem('transparencia_historial_offline', JSON.stringify(offlineHistory));
 
-          // === Propagación en cascada para contribuyentes (modo offline) ===
+          // === Propagación en cascada para contribuyentes con coherencia matemática total (modo offline) ===
           if (tipo === 'contribuyentes') {
-            // Recalcular los ítems de recaudación basados en la suma de todos los contribuyentes
             let sumContrib = 0, sumCirc = 0, sumAseo = 0;
             parsedRows.forEach(c => {
-              sumContrib += parseInt(c.aporte_contribucion) || 0;
-              sumCirc += parseInt(c.aporte_circulacion) || 0;
-              sumAseo += parseInt(c.aporte_aseo) || 0;
+              sumContrib += parseInt(String(c.aporte_contribucion).replace(/[^\d-]/g, '')) || 0;
+              sumCirc += parseInt(String(c.aporte_circulacion).replace(/[^\d-]/g, '')) || 0;
+              sumAseo += parseInt(String(c.aporte_aseo).replace(/[^\d-]/g, '')) || 0;
             });
 
-            // Leer recaudación existente o crear por defecto
-            let recItems = [];
-            try {
-              const storedRec = localStorage.getItem('transparencia_carga_recaudacion');
-              if (storedRec) recItems = JSON.parse(storedRec);
-            } catch(e) {}
+            // Coherencia matemática estricta: escala de factor 2000 (igual que backend calcularPresupuestoDinamico)
+            const totalVecinosReal = sumContrib + sumCirc + sumAseo;
+            const totalVecinosEscalado = totalVecinosReal * 2000;
+            
+            // T = VecinosEscalados / 0.30
+            const recaudacionTotalDinamica = Math.round(totalVecinosEscalado / 0.30);
+            // Gasto = 92% de los ingresos
+            const gastoTotalDinamico = Math.round(recaudacionTotalDinamica * 0.92);
 
-            if (recItems.length === 0) {
-              // Crear ítems por defecto basados en datos semilla (solo aportes vecinos para el demo)
-              recItems = [
-                { nombre: 'Impuesto Territorial', monto: 0, porcentaje: 0 },
-                { nombre: 'Permisos de Circulación', monto: 0, porcentaje: 0 },
-                { nombre: 'Derechos de Aseo', monto: 0, porcentaje: 0 }
-              ];
-            }
+            // Desglose de ingresos según proporciones de la municipalidad (coherencia matemática)
+            const fcmTotal = Math.round(recaudacionTotalDinamica * 0.45);
+            const patentesTotal = Math.round(recaudacionTotalDinamica * 0.15);
+            const otrosTotal = Math.round(recaudacionTotalDinamica * 0.10);
 
-            // Actualizar los ítems que corresponden a contribuciones de vecinos
-            recItems.forEach(it => {
-              const n = it.nombre.toLowerCase();
-              if (n.includes('territorial') || n.includes('contribucion')) it.monto = sumContrib;
-              else if (n.includes('circulacion') || n.includes('circulación')) it.monto = sumCirc;
-              else if (n.includes('aseo')) it.monto = sumAseo;
-            });
-
-            // Recalcular total y porcentajes
-            const nuevoTotal = recItems.reduce((s, it) => s + (parseInt(it.monto) || 0), 0);
-            recItems.forEach(it => {
-              it.porcentaje = nuevoTotal > 0 ? parseFloat(((parseInt(it.monto) / nuevoTotal) * 100).toFixed(2)) : 0;
-            });
+            // Armar items de recaudación con sus respectivos porcentajes correctos
+            const recItems = [
+              { nombre: 'Impuesto Territorial (Vecinos)', monto: sumContrib * 2000, porcentaje: parseFloat(((sumContrib * 2000) / recaudacionTotalDinamica * 100).toFixed(2)) },
+              { nombre: 'Permisos de Circulación (Vecinos)', monto: sumCirc * 2000, porcentaje: parseFloat(((sumCirc * 2000) / recaudacionTotalDinamica * 100).toFixed(2)) },
+              { nombre: 'Derechos de Aseo (Vecinos)', monto: sumAseo * 2000, porcentaje: parseFloat(((sumAseo * 2000) / recaudacionTotalDinamica * 100).toFixed(2)) },
+              { nombre: 'Fondo Común Municipal (FCM)', monto: fcmTotal, porcentaje: 45.00 },
+              { nombre: 'Patentes Comerciales e Industriales', monto: patentesTotal, porcentaje: 15.00 },
+              { nombre: 'Derechos de Concesión y Otros Ingresos', monto: otrosTotal, porcentaje: 10.00 }
+            ];
 
             // Guardar recaudación actualizada
             localStorage.setItem('transparencia_carga_recaudacion', JSON.stringify(recItems));
 
-            // Actualizar metadata con el nuevo total
+            // Actualizar metadata con el nuevo total y el gasto total dinámico
             let metaArr = [];
             try {
               const storedMeta = localStorage.getItem('transparencia_carga_metadata');
               if (storedMeta) metaArr = JSON.parse(storedMeta);
             } catch(e) {}
             if (metaArr.length > 0) {
-              metaArr[0].recaudacion_total = nuevoTotal;
+              metaArr[0].recaudacion_total = recaudacionTotalDinamica;
+              metaArr[0].gasto_total = gastoTotalDinamico;
             } else {
-              metaArr = [{ ultima_actualizacion: new Date().toISOString().split('T')[0], fuente: 'Dirección de Control y Finanzas', periodo_informado: 'Año Fiscal 2025', recaudacion_total: nuevoTotal, gasto_total: 11920000000, poblacion_comuna: 9800 }];
+              metaArr = [{ 
+                ultima_actualizacion: new Date().toISOString().split('T')[0], 
+                fuente: 'Dirección de Control y Finanzas', 
+                periodo_informado: 'Año Fiscal ' + (new Date().getFullYear() - 1), 
+                recaudacion_total: recaudacionTotalDinamica, 
+                gasto_total: gastoTotalDinamico, 
+                poblacion_comuna: 9800 
+              }];
             }
             localStorage.setItem('transparencia_carga_metadata', JSON.stringify(metaArr));
 
-            logAction(`<span style="color:#22c55e">Propagación en cascada completada: recaudación actualizada a ${App.formatCLP(nuevoTotal)} con ${parsedRows.length} contribuyentes.</span>`);
+            logAction(`<span style="color:#22c55e">Propagación en cascada completada: recaudación actualizada a ${escapeHTML(App.formatCLP(recaudacionTotalDinamica))} con ${parsedRows.length} contribuyentes.</span>`);
           }
 
           showResult('success', {
@@ -936,7 +965,7 @@
           logAction(`<span style="color:#f59e0b">Carga guardada en modo offline (${parsedRows.length} registros). Pendiente sincronización con MySQL.</span>`);
         } else {
           showResult('error', { error: e.message });
-          logAction(`<span style="color:#ef4444">✗ Error en carga: ${e.message}</span>`);
+          logAction(`<span style="color:#ef4444">✗ Error en carga: ${escapeHTML(e.message)}</span>`);
         }
       }
 
@@ -960,9 +989,9 @@
         message.textContent = data.mensaje || 'Los datos fueron cargados correctamente.';
         const r = data.resumen || {};
         summary.innerHTML = `
-          <div class="result-stat"><div class="stat-num">${r.registros_procesados || 0}</div><div class="stat-lbl">Procesados</div></div>
-          <div class="result-stat"><div class="stat-num">${r.registros_insertados || 0}</div><div class="stat-lbl">Insertados</div></div>
-          <div class="result-stat"><div class="stat-num">${r.registros_actualizados || 0}</div><div class="stat-lbl">Actualizados</div></div>
+          <div class="result-stat"><div class="stat-num">${parseInt(r.registros_procesados) || 0}</div><div class="stat-lbl">Procesados</div></div>
+          <div class="result-stat"><div class="stat-num">${parseInt(r.registros_insertados) || 0}</div><div class="stat-lbl">Insertados</div></div>
+          <div class="result-stat"><div class="stat-num">${parseInt(r.registros_actualizados) || 0}</div><div class="stat-lbl">Actualizados</div></div>
         `;
       } else {
         icon.textContent = 'error';
@@ -1005,7 +1034,7 @@
       renderUploadHistory(container, todasLasCargas);
     }
 
-    // Renderizar tabla de historial
+    // Renderizar tabla de historial (Mitigación XSS)
     function renderUploadHistory(container, cargas) {
       // Guardar en localStorage como backup
       localStorage.setItem('transparencia_cargas_history', JSON.stringify(cargas));
@@ -1027,11 +1056,11 @@
         const fecha = c.created_at ? new Date(c.created_at).toLocaleString('es-CL') : '-';
         html += `
           <tr>
-            <td>${fecha}</td>
-            <td><span class="history-tipo-badge">${tipoLabels[c.tipo_carga] || c.tipo_carga}</span></td>
-            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.nombre_archivo}">${c.nombre_archivo}</td>
-            <td>${c.registros_procesados} (${c.registros_insertados} nuevos)</td>
-            <td><span class="history-status-badge ${c.estado}">${c.estado === 'exitoso' ? '✓ Exitoso' : c.estado === 'revertido' ? '⟲ Revertido' : c.estado === 'offline' ? '✓ Offline (Local)' : '✗ Fallido'}</span></td>
+            <td>${escapeHTML(fecha)}</td>
+            <td><span class="history-tipo-badge">${escapeHTML(tipoLabels[c.tipo_carga] || c.tipo_carga)}</span></td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHTML(c.nombre_archivo)}">${escapeHTML(c.nombre_archivo)}</td>
+            <td>${parseInt(c.registros_procesados)} (${parseInt(c.registros_insertados)} nuevos)</td>
+            <td><span class="history-status-badge ${escapeHTML(c.estado)}">${c.estado === 'exitoso' ? '✓ Exitoso' : c.estado === 'revertido' ? '⟲ Revertido' : c.estado === 'offline' ? '✓ Offline (Local)' : '✗ Fallido'}</span></td>
           </tr>`;
       });
 
@@ -1040,7 +1069,7 @@
     }
 
     // =============================================
-    // RF12 — Lógica de Períodos (existente)
+    // RF12 — Lógica de Períodos
     // =============================================
 
     async function loadPeriodsData() {
@@ -1074,14 +1103,21 @@
           logAction("Datos cargados localmente desde localStorage (Respaldo Offline).");
         } else {
           allPeriods = [];
-          const years = [2023, 2024, 2025, 2026];
+          
+          // Eliminación de años estrictos: rango dinámico hasta el año actual + 1
+          const currentYear = new Date().getFullYear();
+          const years = [];
+          for (let y = 2023; y <= currentYear + 1; y++) {
+            years.push(y);
+          }
+          
           years.forEach(y => {
             Object.keys(monthNames).forEach(m => {
               allPeriods.push({
                 anio: y,
                 mes: m,
                 nombre_mes: monthNames[m],
-                habilitado: y === 2026 ? 0 : 1
+                habilitado: y === (currentYear + 1) ? 0 : 1
               });
             });
           });
@@ -1114,20 +1150,20 @@
         yearCard.innerHTML = `
           <div class="year-header">
             <div class="d-flex align-items-center">
-              <h4 class="year-title mr-3">${year}</h4>
-              <span class="admin-status-badge ${periodsInYear.some(p => p.habilitado) ? 'status-enabled' : 'status-disabled'}" id="badge-${year}">
+              <h4 class="year-title mr-3">${escapeHTML(year)}</h4>
+              <span class="admin-status-badge ${periodsInYear.some(p => p.habilitado) ? 'status-enabled' : 'status-disabled'}" id="badge-${escapeHTML(year)}">
                 ${periodsInYear.some(p => p.habilitado) ? 'Con Períodos Activos' : 'Todo Deshabilitado'}
               </span>
             </div>
             <div class="d-flex align-items-center">
               <span class="mr-2" style="font-size:0.8rem;color:#64748b;font-weight:500">Habilitar Año Completo:</span>
               <label class="switch-cu m-0">
-                <input type="checkbox" id="switch-year-${year}" ${isYearEnabled ? 'checked' : ''} onchange="toggleEntireYear(${year}, this.checked)">
+                <input type="checkbox" id="switch-year-${escapeHTML(year)}" ${isYearEnabled ? 'checked' : ''} onchange="toggleEntireYear(${parseInt(year)}, this.checked)">
                 <span class="slider-cu"></span>
               </label>
             </div>
           </div>
-          <div class="month-grid" id="grid-${year}"></div>
+          <div class="month-grid" id="grid-${escapeHTML(year)}"></div>
         `;
 
         container.appendChild(yearCard);
@@ -1142,9 +1178,9 @@
           const item = document.createElement('div');
           item.className = 'month-item';
           item.innerHTML = `
-            <span class="month-name">${p.nombre_mes}</span>
+            <span class="month-name">${escapeHTML(p.nombre_mes)}</span>
             <label class="switch-cu m-0">
-              <input type="checkbox" id="switch-${p.anio}-${p.mes}" ${p.habilitado ? 'checked' : ''} onchange="toggleSinglePeriod(${p.anio}, '${p.mes}', this.checked)">
+              <input type="checkbox" id="switch-${escapeHTML(p.anio)}-${escapeHTML(p.mes)}" ${p.habilitado ? 'checked' : ''} onchange="toggleSinglePeriod(${parseInt(p.anio)}, '${escapeHTML(p.mes)}', this.checked)">
               <span class="slider-cu"></span>
             </label>
           `;
@@ -1163,25 +1199,37 @@
       localStorage.setItem('transparencia_periodos', JSON.stringify(allPeriods));
 
       const labelMes = monthNames[mes];
-      logAction(`Período <strong>${labelMes} ${anio}</strong> modificado a <strong>${isChecked ? 'HABILITADO' : 'DESHABILITADO'}</strong>.`);
+      logAction(`Período <strong>${escapeHTML(labelMes)} ${escapeHTML(anio)}</strong> modificado a <strong>${isChecked ? 'HABILITADO' : 'DESHABILITADO'}</strong>.`);
 
       try {
         const baseApi = App.getBaseApiUrl();
         if (!baseApi) throw new Error("Offline");
 
+        // Headers con CSRF e Integridad de Sesión
+        const headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        };
+        const xsrfToken = getCookie('XSRF-TOKEN');
+        if (xsrfToken) {
+          headers['X-XSRF-TOKEN'] = xsrfToken;
+        }
+        
+        const sess = JSON.parse(sessionStorage.getItem('transparencia_session') || '{}');
+        if (sess && sess.token) {
+          headers['Authorization'] = `Bearer ${sess.token}`;
+        }
+
         const response = await fetch(`${baseApi}/periodos/toggle`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
+          headers: headers,
           body: JSON.stringify({ anio: parseInt(anio), mes: mes, habilitado: isChecked })
         });
 
         if (!response.ok) throw new Error("NetworkError");
         const res = await response.json();
         console.log("MySQL Sincronizado:", res.mensaje);
-        logAction(`Sincronización exitosa con la base de datos MySQL (Año ${anio}, Mes ${mes}).`);
+        logAction(`Sincronización exitosa con la base de datos MySQL (Año ${escapeHTML(anio)}, Mes ${escapeHTML(mes)}).`);
       } catch (e) {
         console.warn("No se pudo sincronizar en el servidor real. Estado guardado en LocalStorage.", e);
         logAction(`<span style="color:#f59e0b">Advertencia: Sincronizado solo en LocalStorage (Servidor offline/Live Server).</span>`);
@@ -1190,10 +1238,14 @@
       updateYearBadges(anio);
     }
 
+    // Optimización de peticiones concurrentes para habilitar el año completo (Cumplimiento de Rendimiento y UX)
     async function toggleEntireYear(anio, isChecked) {
       const val = isChecked ? 1 : 0;
 
-      logAction(`Modificando año completo <strong>${anio}</strong> a <strong>${isChecked ? 'HABILITADO' : 'DESHABILITADO'}</strong>...`);
+      logAction(`Modificando año completo <strong>${escapeHTML(anio)}</strong> a <strong>${isChecked ? 'HABILITADO' : 'DESHABILITADO'}</strong>...`);
+
+      const baseApi = App.getBaseApiUrl();
+      const promises = [];
 
       for (const p of allPeriods) {
         if (p.anio === anio) {
@@ -1201,24 +1253,57 @@
           const cb = document.getElementById(`switch-${p.anio}-${p.mes}`);
           if (cb) cb.checked = isChecked;
 
-          try {
-            const baseApi = App.getBaseApiUrl();
-            if (baseApi) {
-              await fetch(`${baseApi}/periodos/toggle`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json'
-                },
-                body: JSON.stringify({ anio: parseInt(anio), mes: p.mes, habilitado: isChecked })
-              });
+          if (baseApi) {
+            // Headers con CSRF e Integridad de Sesión
+            const headers = {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            };
+            const xsrfToken = getCookie('XSRF-TOKEN');
+            if (xsrfToken) {
+              headers['X-XSRF-TOKEN'] = xsrfToken;
             }
-          } catch (e) { }
+            const sess = JSON.parse(sessionStorage.getItem('transparencia_session') || '{}');
+            if (sess && sess.token) {
+              headers['Authorization'] = `Bearer ${sess.token}`;
+            }
+
+            const reqPromise = fetch(`${baseApi}/periodos/toggle`, {
+              method: 'POST',
+              headers: headers,
+              body: JSON.stringify({ anio: parseInt(anio), mes: p.mes, habilitado: isChecked })
+            }).then(async r => {
+              if (!r.ok) {
+                const data = await r.json().catch(() => ({}));
+                return { ok: false, mes: p.mes, error: data.error || 'Server error' };
+              }
+              return { ok: true, mes: p.mes };
+            }).catch(e => {
+              return { ok: false, mes: p.mes, error: e.message };
+            });
+            promises.push(reqPromise);
+          }
         }
       }
 
       localStorage.setItem('transparencia_periodos', JSON.stringify(allPeriods));
-      logAction(`Año completo <strong>${anio}</strong> guardado como <strong>${isChecked ? 'HABILITADO' : 'DESHABILITADO'}</strong>.`);
+
+      if (promises.length > 0) {
+        try {
+          const results = await Promise.all(promises);
+          const failures = results.filter(r => !r.ok);
+          if (failures.length > 0) {
+            logAction(`<span style="color:#ef4444">Fallo parcial: ${failures.length} períodos no se pudieron sincronizar en el servidor.</span>`);
+          } else {
+            logAction(`Sincronización concurrente exitosa de todos los períodos del año ${escapeHTML(anio)} con la base de datos MySQL.`);
+          }
+        } catch (err) {
+          logAction(`<span style="color:#ef4444">Error crítico en sincronización concurrente del año: ${escapeHTML(err.message)}</span>`);
+        }
+      } else {
+        logAction(`<span style="color:#f59e0b">Año completo ${escapeHTML(anio)} actualizado en LocalStorage (Modo offline).</span>`);
+      }
+
       updateYearBadges(anio);
     }
 

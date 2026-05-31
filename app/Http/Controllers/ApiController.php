@@ -10,6 +10,27 @@ use App\Models\Contribuyente;
 class ApiController extends \Illuminate\Routing\Controller
 {
     /**
+     * Asegura la existencia de la tabla cargas_transparencia de manera automática sin requerir migración manual.
+     */
+    private function ensureAuditTableExists()
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('cargas_transparencia')) {
+            \Illuminate\Support\Facades\Schema::create('cargas_transparencia', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->increments('id');
+                $table->string('admin_rut_hash', 64);
+                $table->string('tipo_carga', 50);
+                $table->string('nombre_archivo', 255);
+                $table->integer('registros_procesados')->default(0);
+                $table->integer('registros_actualizados')->default(0);
+                $table->integer('registros_insertados')->default(0);
+                $table->string('estado', 20)->default('exitoso');
+                $table->text('detalle_error')->nullable();
+                $table->timestamp('created_at')->useCurrent();
+            });
+        }
+    }
+
+    /**
      * Helper para formatear montos en CLP (Peso Chileno).
      */
     private function formatCLP($value)
@@ -435,9 +456,9 @@ class ApiController extends \Illuminate\Routing\Controller
                         'nombre' => 'Sofía Elizabeth Álvarez Pérez',
                         'rut' => '89.234.255-4',
                         'rol' => 'ciudadano',
-                        'recaudacionTotalUsuario' => 2000000,
-                        'detalles' => ['contribucion' => 1400000, 'circulacion' => 500000, 'aseo' => 100000],
-                        'mensual' => [160000,160000,170000,170000,180000,160000,160000,170000,170000,160000,170000,170000]
+                        'recaudacionTotalUsuario' => 5000000,
+                        'detalles' => ['contribucion' => 3500000, 'circulacion' => 1200000, 'aseo' => 300000],
+                        'mensual' => [400000,420000,410000,430000,420000,410000,420000,430000,410000,420000,410000,420000]
                     ]
                 ]);
             } elseif ($cleanRut === '87654321' && $password === 'Pb_123@03') {
@@ -543,6 +564,8 @@ class ApiController extends \Illuminate\Routing\Controller
      */
     public function uploadTransparencia(Request $request)
     {
+        $this->ensureAuditTableExists();
+
         // 1. Validar inputs básicos
         try {
             $request->validate([
@@ -575,8 +598,11 @@ class ApiController extends \Illuminate\Routing\Controller
                 ], 403);
             }
         } catch (\Exception $e) {
-            // Si no hay conexión a DB, permitir con advertencia (modo offline)
-            Log::warning("uploadTransparencia - No se pudo verificar rol admin en DB: " . $e->getMessage());
+            // Cumplimiento estricto ISO 27001 (Fail-Secure) - Evitar Bypass "Fail-Open"
+            Log::error("uploadTransparencia - Error crítico de base de datos al verificar administrador: " . $e->getMessage());
+            return response()->json([
+                'error' => 'Error interno de autenticación: No se pudo verificar los privilegios de administrador en el servidor.'
+            ], 500);
         }
 
         // 3. Parsear archivo CSV
@@ -652,7 +678,7 @@ class ApiController extends \Illuminate\Routing\Controller
                     foreach ($rows as $row) {
                         DB::table('recaudacion_items')->insert([
                             'nombre'     => $row['nombre'],
-                            'monto'      => (int) $row['monto'],
+                            'monto'      => $this->cleanInt($row['monto']),
                             'porcentaje' => (float) $row['porcentaje'],
                         ]);
                         $registrosInsertados++;
@@ -660,18 +686,35 @@ class ApiController extends \Illuminate\Routing\Controller
                     break;
 
                 case 'gastos':
-                    DB::table('gasto_subitems')->truncate();
-                    DB::table('gasto_areas')->truncate();
+                    // Obtener las áreas que vienen en el CSV
+                    $csvAreas = array_map(fn($row) => $row['area'], $rows);
+
+                    // Borrar las áreas de la base de datos que ya no vienen en el CSV (esto borrará en cascada sus subitems)
+                    DB::table('gasto_areas')->whereNotIn('area', $csvAreas)->delete();
+
                     foreach ($rows as $row) {
-                        DB::table('gasto_areas')->insert([
-                            'area'           => $row['area'],
-                            'icono'          => $row['icono'],
-                            'color'          => $row['color'],
-                            'monto_asignado' => (int) $row['monto_asignado'],
-                            'porcentaje'     => (float) $row['porcentaje'],
-                            'descripcion'    => $row['descripcion'],
-                        ]);
-                        $registrosInsertados++;
+                        $existing = DB::table('gasto_areas')->where('area', $row['area'])->first();
+                        
+                        if ($existing) {
+                            DB::table('gasto_areas')->where('id', $existing->id)->update([
+                                'icono'          => $row['icono'],
+                                'color'          => $row['color'],
+                                'monto_asignado' => $this->cleanInt($row['monto_asignado']),
+                                'porcentaje'     => (float) $row['porcentaje'],
+                                'descripcion'    => $row['descripcion'],
+                            ]);
+                            $registrosActualizados++;
+                        } else {
+                            DB::table('gasto_areas')->insert([
+                                'area'           => $row['area'],
+                                'icono'          => $row['icono'],
+                                'color'          => $row['color'],
+                                'monto_asignado' => $this->cleanInt($row['monto_asignado']),
+                                'porcentaje'     => (float) $row['porcentaje'],
+                                'descripcion'    => $row['descripcion'],
+                            ]);
+                            $registrosInsertados++;
+                        }
                     }
                     break;
 
@@ -682,7 +725,7 @@ class ApiController extends \Illuminate\Routing\Controller
                             'codigo'     => $row['codigo'],
                             'nombre'     => $row['nombre'],
                             'area'       => $row['area'],
-                            'monto'      => (int) $row['monto'],
+                            'monto'      => $this->cleanInt($row['monto']),
                             'porcentaje' => (float) $row['porcentaje'],
                             'estado'     => $row['estado'],
                         ]);
@@ -696,7 +739,7 @@ class ApiController extends \Illuminate\Routing\Controller
                         DB::table('servicios')->insert([
                             'servicio'   => $row['servicio'],
                             'proveedor'  => $row['proveedor'],
-                            'monto'      => (int) $row['monto'],
+                            'monto'      => $this->cleanInt($row['monto']),
                             'porcentaje' => (float) $row['porcentaje'],
                         ]);
                         $registrosInsertados++;
@@ -711,9 +754,9 @@ class ApiController extends \Illuminate\Routing\Controller
                             'ultima_actualizacion' => $row['ultima_actualizacion'],
                             'fuente'               => $row['fuente'],
                             'periodo_informado'    => $row['periodo_informado'],
-                            'recaudacion_total'    => (int) $row['recaudacion_total'],
-                            'gasto_total'          => (int) $row['gasto_total'],
-                            'poblacion_comuna'     => (int) $row['poblacion_comuna'],
+                            'recaudacion_total'    => $this->cleanInt($row['recaudacion_total']),
+                            'gasto_total'          => $this->cleanInt($row['gasto_total']),
+                            'poblacion_comuna'     => $this->cleanInt($row['poblacion_comuna']),
                         ]);
                         $registrosActualizados = 1;
                     } else {
@@ -721,9 +764,9 @@ class ApiController extends \Illuminate\Routing\Controller
                             'ultima_actualizacion' => $row['ultima_actualizacion'],
                             'fuente'               => $row['fuente'],
                             'periodo_informado'    => $row['periodo_informado'],
-                            'recaudacion_total'    => (int) $row['recaudacion_total'],
-                            'gasto_total'          => (int) $row['gasto_total'],
-                            'poblacion_comuna'     => (int) $row['poblacion_comuna'],
+                            'recaudacion_total'    => $this->cleanInt($row['recaudacion_total']),
+                            'gasto_total'          => $this->cleanInt($row['gasto_total']),
+                            'poblacion_comuna'     => $this->cleanInt($row['poblacion_comuna']),
                         ]);
                         $registrosInsertados = 1;
                     }
@@ -737,16 +780,16 @@ class ApiController extends \Illuminate\Routing\Controller
 
                         $existing = DB::table('contribuyentes')->where('rut_hash', $rutHash)->first();
 
-                        $totalAporte = (int) $row['aporte_contribucion'] + (int) $row['aporte_circulacion'] + (int) $row['aporte_aseo'];
+                        $totalAporte = $this->cleanInt($row['aporte_contribucion']) + $this->cleanInt($row['aporte_circulacion']) + $this->cleanInt($row['aporte_aseo']);
                         $mensual = $totalAporte > 0 ? round($totalAporte / 12) : 0;
                         $valoresMensuales = json_encode(array_fill(0, 12, round($totalAporte / 12)));
 
                         if ($existing) {
                             // Actualizar SOLO aportes — NO tocar password_hash ni rol
                             $updateData = [
-                                'aporte_contribucion' => (int) $row['aporte_contribucion'],
-                                'aporte_circulacion'  => (int) $row['aporte_circulacion'],
-                                'aporte_aseo'         => (int) $row['aporte_aseo'],
+                                'aporte_contribucion' => $this->cleanInt($row['aporte_contribucion']),
+                                'aporte_circulacion'  => $this->cleanInt($row['aporte_circulacion']),
+                                'aporte_aseo'         => $this->cleanInt($row['aporte_aseo']),
                                 'valores_mensuales'   => $valoresMensuales,
                             ];
                             // Actualizar nombre encriptado si el modelo usa casts
@@ -754,9 +797,9 @@ class ApiController extends \Illuminate\Routing\Controller
                                 $contrib = Contribuyente::where('rut_hash', $rutHash)->first();
                                 if ($contrib) {
                                     $contrib->nombre_encriptado = $row['nombre'];
-                                    $contrib->aporte_contribucion = (int) $row['aporte_contribucion'];
-                                    $contrib->aporte_circulacion = (int) $row['aporte_circulacion'];
-                                    $contrib->aporte_aseo = (int) $row['aporte_aseo'];
+                                    $contrib->aporte_contribucion = $this->cleanInt($row['aporte_contribucion']);
+                                    $contrib->aporte_circulacion = $this->cleanInt($row['aporte_circulacion']);
+                                    $contrib->aporte_aseo = $this->cleanInt($row['aporte_aseo']);
                                     $contrib->valores_mensuales = array_fill(0, 12, round($totalAporte / 12));
                                     $contrib->save();
                                 }
@@ -774,9 +817,9 @@ class ApiController extends \Illuminate\Routing\Controller
                                 $contrib->nombre_encriptado = $row['nombre'];
                                 $contrib->password_hash = \Illuminate\Support\Facades\Hash::make('Contribuyente@123');
                                 $contrib->rol = 'ciudadano';
-                                $contrib->aporte_contribucion = (int) $row['aporte_contribucion'];
-                                $contrib->aporte_circulacion = (int) $row['aporte_circulacion'];
-                                $contrib->aporte_aseo = (int) $row['aporte_aseo'];
+                                $contrib->aporte_contribucion = $this->cleanInt($row['aporte_contribucion']);
+                                $contrib->aporte_circulacion = $this->cleanInt($row['aporte_circulacion']);
+                                $contrib->aporte_aseo = $this->cleanInt($row['aporte_aseo']);
                                 $contrib->valores_mensuales = array_fill(0, 12, round($totalAporte / 12));
                                 $contrib->save();
                             } catch (\Exception $modelEx) {
@@ -786,9 +829,9 @@ class ApiController extends \Illuminate\Routing\Controller
                                     'nombre_encriptado'   => $row['nombre'],
                                     'password_hash'       => \Illuminate\Support\Facades\Hash::make('Contribuyente@123'),
                                     'rol'                 => 'ciudadano',
-                                    'aporte_contribucion' => (int) $row['aporte_contribucion'],
-                                    'aporte_circulacion'  => (int) $row['aporte_circulacion'],
-                                    'aporte_aseo'         => (int) $row['aporte_aseo'],
+                                    'aporte_contribucion' => $this->cleanInt($row['aporte_contribucion']),
+                                    'aporte_circulacion'  => $this->cleanInt($row['aporte_circulacion']),
+                                    'aporte_aseo'         => $this->cleanInt($row['aporte_aseo']),
                                     'valores_mensuales'   => $valoresMensuales,
                                 ]);
                             }
@@ -891,6 +934,8 @@ class ApiController extends \Illuminate\Routing\Controller
      */
     public function getHistorialCargas()
     {
+        $this->ensureAuditTableExists();
+
         try {
             $cargas = DB::table('cargas_transparencia')
                 ->select('id', 'tipo_carga', 'nombre_archivo', 'registros_procesados',
@@ -1101,6 +1146,14 @@ class ApiController extends \Illuminate\Routing\Controller
             }
         }
         return $valor;
+    }
+
+    /**
+     * Limpia y sanitiza un valor numérico en formato string (removiendo puntos, comas, etc.) antes de convertirlo a entero.
+     */
+    private function cleanInt($value)
+    {
+        return (int) preg_replace('/[^\d-]/', '', $value);
     }
 }
 

@@ -28,7 +28,8 @@
   <header class="header-institucional">
     <div class="container d-flex align-items-center flex-wrap">
       <div class="logo-container"><img src="../assets/img/logo-municipalidad.png" alt="Escudo">
-        <h1 class="institution-name">Municipalidad de Santo Domingo<small>Portal de Transparencia Activa</small></h1>
+        <h1 class="institution-name">Municipalidad de Santo Domingo<small>Portal de Transparencia Activa — Ley N°
+            20.285</small></h1>
       </div>
     </div>
   </header>
@@ -36,7 +37,7 @@
     <div class="container"><button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navMain"
         style="color:#fff;border-color:rgba(255,255,255,0.3)"><span class="material-icons">menu</span></button>
       <div class="collapse navbar-collapse" id="navMain">
-        <ul class="navbar-nav">
+        <ul class="navbar-nav mr-auto">
           <li class="nav-item"><a class="nav-link" href="../index.html"><span class="material-icons mr-1"
                 style="font-size:16px;vertical-align:middle">home</span> Inicio</a></li>
           <li class="nav-item"><a class="nav-link" href="destino-impuestos.html"><span class="material-icons mr-1"
@@ -44,9 +45,23 @@
           <li class="nav-item"><a class="nav-link active" href="presupuesto.html"><span class="material-icons mr-1"
                 style="font-size:16px;vertical-align:middle">pie_chart</span> Presupuesto Municipal</a></li>
         </ul>
+        <ul class="navbar-nav d-flex align-items-center" id="nav-session-container">
+          <li class="nav-item" id="nav-login-btn" style="display:flex; align-items:center;">
+            <a href="login.html" style="color:#006FB3 !important; font-weight:700; background:#ffffff !important; border-radius:4px; padding:6px 14px; box-shadow:0 2px 4px rgba(0,0,0,0.15); display:inline-flex; align-items:center; text-decoration:none; height:32px; line-height:1; font-size:0.875rem; margin-top:2px;">
+              <span class="material-icons mr-1" style="font-size:16px; vertical-align:middle; color:#006FB3 !important;">vpn_key</span> ClaveÚnica
+            </a>
+          </li>
+          <li class="nav-item d-flex align-items-center" id="nav-user-info" style="display:none !important">
+            <span style="color:#fff;font-size:0.875rem;margin-right:15px;font-weight:500" id="nav-user-name"></span>
+            <a class="nav-link" href="#" onclick="App.logout()" style="color:#ffb703;font-weight:700;padding-left:0">
+              <span class="material-icons mr-1" style="font-size:16px;vertical-align:middle">logout</span> Cerrar Sesión
+            </a>
+          </li>
+        </ul>
       </div>
     </div>
   </nav>
+
   <div class="breadcrumb-gov">
     <div class="container">
       <nav aria-label="breadcrumb">
@@ -194,90 +209,79 @@
   <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.digital.gob.cl/framework/js/gob.cl.js"></script>
+  <script src="../js/budget-engine.js"></script>
   <script src="../js/app.js"></script>
   <script src="../js/tables.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
+      // Manejo de la sesión activa en el navbar
+      if (App.isLoggedIn()) {
+        const session = App.getUserSession();
+        document.getElementById('nav-login-btn').style.display = 'none';
+        const userInfo = document.getElementById('nav-user-info');
+        userInfo.style.setProperty('display', 'flex', 'important');
+        const firstName = session.user.nombre.split(' ')[0];
+        document.getElementById('nav-user-name').textContent = `Hola, ${firstName}`;
+      } else {
+        document.getElementById('nav-login-btn').style.display = 'block';
+        document.getElementById('nav-user-info').style.setProperty('display', 'none', 'important');
+      }
+
       // Obtener períodos de consulta habilitados
       const allPeriods = await App.getPeriodosHabilitados();
 
+      // Poblar dinámicamente el selector de años desde los períodos disponibles para evitar magic numbers o años fijos
+      const selectAnio = document.getElementById('filterAnio');
+      if (selectAnio) {
+        const uniqueYears = [...new Set(allPeriods.map(p => String(p.anio)))].sort((a, b) => b - a);
+        const savedYear = selectAnio.value || '2025';
+        selectAnio.innerHTML = '';
+        uniqueYears.forEach(y => {
+          const opt = document.createElement('option');
+          opt.value = y;
+          opt.textContent = y;
+          if (y === savedYear) opt.selected = true;
+          selectAnio.appendChild(opt);
+        });
+        if (!selectAnio.value && selectAnio.options.length > 0) {
+          selectAnio.options[0].selected = true;
+        }
+      }
+
       let baseItems = [];
+      let apiSucceeded = false;
       try {
         const apiPres = await App.loadJSON('../data/presupuesto.json');
         if (apiPres && apiPres.length > 0) {
           baseItems = apiPres;
+          apiSucceeded = true;
         } else {
           throw new Error("No data returned");
         }
       } catch (e) {
-        const offlineGastos = localStorage.getItem('transparencia_carga_gastos');
-        if (offlineGastos) {
-          const parsed = JSON.parse(offlineGastos);
-          baseItems = parsed.map(row => {
-            const asig = parseInt(row.monto_asignado);
-            return {
-              area: row.area,
-              asignado: asig,
-              ejecutado: Math.round(asig * 0.926), // ejecución simulada para la vista
-              pctEjec: parseFloat(row.porcentaje)
-            };
-          });
-        } else {
-          baseItems = [
-            { area: 'Educación', asignado: 818400, ejecutado: 757838, pctEjec: 92.6 },
-            { area: 'Salud', asignado: 545600, ejecutado: 518320, pctEjec: 95.0 },
-            { area: 'Seguridad Ciudadana', asignado: 327360, ejecutado: 310992, pctEjec: 95.0 },
-            { area: 'Obras Municipales', asignado: 272800, ejecutado: 239791, pctEjec: 87.9 },
-            { area: 'Servicios Comunitarios', asignado: 218240, ejecutado: 205145, pctEjec: 94.0 },
-            { area: 'Medio Ambiente', asignado: 163680, ejecutado: 155496, pctEjec: 95.0 },
-            { area: 'Cultura y Deporte', asignado: 136400, ejecutado: 122623, pctEjec: 89.9 },
-            { area: 'Administración', asignado: 245520, ejecutado: 189050, pctEjec: 77.0 }
-          ];
-        }
+        // Offline: usar BudgetEngine centralizado
+        const offlineItems = BudgetEngine.getPresupuestoFromOfflineGastos();
+        baseItems = offlineItems || BudgetEngine.getPresupuestoFallback();
       }
       const multipliers = { '2026': 1.05, '2025': 1, '2024': 0.93, '2023': 0.86 };
       const colors = ['#2E86AB', '#E8433E', '#1B4332', '#F77F00', '#7209B7', '#52B788', '#E09F3E', '#6C757D'];
       const fmt = v => '$' + new Intl.NumberFormat('es-CL').format(v);
-
-      // === Recalcular ingresos totales desde contribuyentes + recaudación ===
+ 
+      // === Recalcular ingresos totales: solo offline usa BudgetEngine ===
       let recaudacionTotalOverride = null;
-      try {
-        // Leer recaudación actualizada (puede venir de cascada de contribuyentes)
-        const storedRec = localStorage.getItem('transparencia_carga_recaudacion');
-        const storedPadron = localStorage.getItem('transparencia_carga_contribuyentes');
-
-        // Regla de coherencia para el DEMO: Si existe el padrón, el presupuesto total ES la suma del padrón.
-        if (storedPadron) {
-          const padron = JSON.parse(storedPadron);
-          if (padron && padron.length > 0) {
-            let pTotal = 0;
-            padron.forEach(c => {
-              pTotal += (parseInt(c.aporte_contribucion) || 0) + (parseInt(c.aporte_circulacion) || 0) + (parseInt(c.aporte_aseo) || 0);
-            });
-            recaudacionTotalOverride = pTotal;
-          }
-        } else if (storedRec) {
-          const recItems = JSON.parse(storedRec);
-          recaudacionTotalOverride = recItems.reduce((s, it) => s + (parseInt(it.monto) || 0), 0);
-        }
-
-        // O leer de metadata directamente
-        if (!recaudacionTotalOverride) {
-          const storedMeta = localStorage.getItem('transparencia_carga_metadata');
-          if (storedMeta) {
-            const meta = JSON.parse(storedMeta)[0];
-            if (meta && meta.recaudacion_total) {
-              recaudacionTotalOverride = parseInt(meta.recaudacion_total);
-            }
-          }
-        }
-      } catch (e) { }
-
+      let isScaledOverride = false;
+      let calc = null;
+      if (!apiSucceeded) {
+        calc = BudgetEngine.calcularPresupuestoDinamico(2000);
+        recaudacionTotalOverride = calc.ingresos.total;
+        isScaledOverride = true;
+      }
+ 
       function updateDropdownsDisabledState() {
         const selectAnio = document.getElementById('filterAnio');
         const selectMes = document.getElementById('filterMes');
         const selectedYear = selectAnio.value;
-
+ 
         Array.from(selectAnio.options).forEach(opt => {
           const yearVal = opt.value;
           const periodsForYear = allPeriods.filter(p => p.anio == yearVal);
@@ -286,30 +290,30 @@
           if (!isAnyEnabled) opt.text = `${yearVal} (No Habilitado)`;
           else opt.text = yearVal;
         });
-
+ 
         Array.from(selectMes.options).forEach(opt => {
           const monthVal = opt.value;
           const periodObj = allPeriods.find(p => p.anio == selectedYear && p.mes === monthVal);
           const isEnabled = periodObj ? periodObj.habilitado == 1 : true;
           opt.disabled = !isEnabled;
-
+ 
           const cleanText = opt.text.replace(' (No disponible)', '');
           if (!isEnabled) opt.text = `${cleanText} (No disponible)`;
           else opt.text = cleanText;
         });
       }
-
+ 
       function render() {
         updateDropdownsDisabledState();
-
+ 
         const anio = document.getElementById('filterAnio').value;
         const mes = document.getElementById('filterMes').value;
-
+ 
         const periodObj = allPeriods.find(p => p.anio == anio && p.mes === mes);
         const isHabilitado = periodObj ? periodObj.habilitado == 1 : true;
-
+ 
         const alertBox = document.getElementById('periodDisabledAlert');
-
+ 
         if (!isHabilitado) {
           alertBox.style.display = 'block';
           document.getElementById('sIngresos').textContent = fmt(0);
@@ -326,21 +330,28 @@
         } else {
           alertBox.style.display = 'none';
         }
-
+ 
         const mult = multipliers[anio] || 1;
         const div = mes === 'anual' ? 1 : 12;
-        const items = baseItems.map(it => ({
+ 
+        // Si hay un escalado de contribuyentes offline, escalamos proporcionalmente las áreas de gasto
+        let currentBaseItems = baseItems;
+        if (isScaledOverride) {
+          currentBaseItems = BudgetEngine.getGastosEscalados(calc, baseItems);
+        }
+ 
+        const items = currentBaseItems.map(it => ({
           area: it.area, asignado: Math.round(it.asignado * mult / div), ejecutado: Math.round(it.ejecutado * mult / div), pctEjec: it.pctEjec
         }));
         const totI_base = items.reduce((s, i) => s + i.asignado, 0);
         const totG = items.reduce((s, i) => s + i.ejecutado, 0);
         // Calcular los ingresos a partir de los gastos para mantener la coherencia y superávit del modelo
         const ratioGastosIngresos = totI_base > 100000000 ? 0.92 : (11.92 / 12.85);
-        const totI = (recaudacionTotalOverride && anio === '2025' && mes === 'anual') ? recaudacionTotalOverride : Math.round(totI_base / ratioGastosIngresos);
+        const totI = recaudacionTotalOverride ? Math.round(recaudacionTotalOverride * mult / div) : Math.round(totI_base / ratioGastosIngresos);
         document.getElementById('sIngresos').textContent = fmt(totI);
-        document.getElementById('sGastos').textContent = fmt(totI_base); // Mostrar el presupuesto total asignado para gastos ($35.131.733.334)
-        document.getElementById('sSuperavit').textContent = fmt(totI - totI_base); // Mostrar el superávit presupuestario inicial ($3.054.933.333)
-        document.getElementById('sEjec').textContent = (totG / totI_base * 100).toFixed(1) + '%'; // Tasa de ejecución real sobre el presupuesto de gastos (91.6%)
+        document.getElementById('sGastos').textContent = fmt(totI_base); 
+        document.getElementById('sSuperavit').textContent = fmt(totI - totI_base); 
+        document.getElementById('sEjec').textContent = (totI_base > 0 ? (totG / totI_base * 100).toFixed(1) : '0') + '%'; 
         document.getElementById('chartPresupuesto').innerHTML = '';
         App.renderBarChart('chartPresupuesto', items.map((it, i) => ({ label: it.area, value: it.ejecutado, color: colors[i] })));
         if (window._tables['tablePresupuesto']) window._tables['tablePresupuesto'].updateData(items);

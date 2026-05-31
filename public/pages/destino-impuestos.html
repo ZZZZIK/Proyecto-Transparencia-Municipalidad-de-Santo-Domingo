@@ -77,7 +77,7 @@
 
   <main>
     <!-- Hero -->
-    <section class="page-hero" style="background:linear-gradient(135deg,#2E86AB 0%,#0A132D 100%)">
+    <section class="page-hero" style="background:linear-gradient(135deg,#006FB3 0%,#0A132D 100%)">
       <div class="container">
         <h1><span class="material-icons mr-2"
             style="font-size:2rem;vertical-align:middle">account_balance_wallet</span>¿Cómo se usaron mis impuestos?
@@ -387,6 +387,7 @@
   <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.digital.gob.cl/framework/js/gob.cl.js"></script>
+  <script src="../js/budget-engine.js"></script>
   <script src="../js/app.js"></script>
   <script src="../js/tables.js"></script>
   <script>
@@ -404,27 +405,45 @@
       // Obtener períodos de consulta habilitados
       const allPeriods = await App.getPeriodosHabilitados();
 
+      // Poblar dinámicamente el selector de años desde los períodos disponibles para evitar magic numbers o años fijos
+      const selectAnio = document.getElementById('filterAnio');
+      if (selectAnio) {
+        const uniqueYears = [...new Set(allPeriods.map(p => String(p.anio)))].sort((a, b) => b - a);
+        const savedYear = selectAnio.value || '2025';
+        selectAnio.innerHTML = '';
+        uniqueYears.forEach(y => {
+          const opt = document.createElement('option');
+          opt.value = y;
+          opt.textContent = y;
+          if (y === savedYear) opt.selected = true;
+          selectAnio.appendChild(opt);
+        });
+        if (!selectAnio.value && selectAnio.options.length > 0) {
+          selectAnio.options[0].selected = true;
+        }
+      }
+
       const data = await App.loadJSON('../data/destino-impuestos.json');
       if (!data) return;
 
       // Inyectar datos del ciudadano activo logueado en la estructura del dashboard
       data.contribuyenteInfo = activeUser;
 
-      let metadataObj = data.metadata;
-      const offlineMeta = localStorage.getItem('transparencia_carga_metadata');
-      if (offlineMeta) {
-        try {
-          const m = JSON.parse(offlineMeta)[0];
-          metadataObj.poblacionComuna = parseInt(m.poblacion_comuna);
-          metadataObj.recaudacionTotal = parseInt(m.recaudacion_total);
-        } catch (e) { }
-      }
-
-      const poblacion = metadataObj.poblacionComuna || 9800;
       const colors = ['#2E86AB', '#E8433E', '#F77F00', '#52B788', '#7209B7', '#1B4332', '#E09F3E', '#6C757D'];
       const fmt = v => '$' + new Intl.NumberFormat('es-CL').format(v);
+      const multipliers = { '2026': 1.05, '2025': 1, '2024': 0.93, '2023': 0.86 };
 
-      // Simulated user tax data by year (Clave Única future integration)
+      // Cargar metadatos generales (BudgetEngine centralizado)
+      let metadataObj = data.metadata;
+      const offlineMeta = BudgetEngine.getMetadata();
+      if (offlineMeta) {
+        metadataObj.poblacionComuna = BudgetEngine.cleanVal(offlineMeta.poblacion_comuna);
+        metadataObj.recaudacionTotal = BudgetEngine.cleanVal(offlineMeta.recaudacion_total);
+      }
+      // Evitar que un valor corrupto de la población arruine el cálculo por habitante
+      const poblacion = (metadataObj.poblacionComuna && metadataObj.poblacionComuna > 100) ? metadataObj.poblacionComuna : 9800;
+
+      // Estructura de contribuciones del usuario simulado por año
       const userData = {
         '2026': { contrib: 0, circ: 0, aseo: 0, monthly: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
         '2025': { contrib: 485000, circ: 165000, aseo: 78000, monthly: [58000, 58000, 62000, 60000, 65000, 60000, 62000, 63000, 58000, 62000, 60000, 60000] },
@@ -432,7 +451,7 @@
         '2023': { contrib: 430000, circ: 145000, aseo: 65000, monthly: [50000, 50000, 55000, 52000, 56000, 53000, 54000, 55000, 50000, 54000, 53000, 52000] }
       };
 
-      // Cargar información del contribuyente desde la sesión de la API
+      // Rellenar dinámicamente con los datos de sesión ClaveÚnica del contribuyente
       if (data.contribuyenteInfo) {
         document.getElementById('userName').textContent = data.contribuyenteInfo.nombre;
         userData['2025'] = {
@@ -442,8 +461,7 @@
           monthly: data.contribuyenteInfo.mensual
         };
 
-        // Si el contribuyente tiene datos para otros años, se pueden poblar aquí.
-        // Para pruebas del admin en 2026, asumiremos montos simulados proporcionales si el admin lo habilita:
+        // Escalar proporcionalmente los otros años
         userData['2026'] = {
           contrib: Math.round(data.contribuyenteInfo.detalles.contribucion * 1.05),
           circ: Math.round(data.contribuyenteInfo.detalles.circulacion * 1.05),
@@ -451,29 +469,143 @@
           monthly: data.contribuyenteInfo.mensual.map(m => Math.round(m * 1.05))
         };
         userData['2024'] = {
-          contrib: Math.round(data.contribuyenteInfo.detalles.contribucion * 0.75),
-          circ: Math.round(data.contribuyenteInfo.detalles.circulacion * 0.75),
-          aseo: Math.round(data.contribuyenteInfo.detalles.aseo * 0.75),
-          monthly: data.contribuyenteInfo.mensual.map(m => Math.round(m * 0.75))
+          contrib: Math.round(data.contribuyenteInfo.detalles.contribucion * 0.93),
+          circ: Math.round(data.contribuyenteInfo.detalles.circulacion * 0.93),
+          aseo: Math.round(data.contribuyenteInfo.detalles.aseo * 0.93),
+          monthly: data.contribuyenteInfo.mensual.map(m => Math.round(m * 0.93))
         };
         userData['2023'] = {
-          contrib: Math.round(data.contribuyenteInfo.detalles.contribucion * 0.50),
-          circ: Math.round(data.contribuyenteInfo.detalles.circulacion * 0.50),
-          aseo: Math.round(data.contribuyenteInfo.detalles.aseo * 0.50),
-          monthly: data.contribuyenteInfo.mensual.map(m => Math.round(m * 0.50))
+          contrib: Math.round(data.contribuyenteInfo.detalles.contribucion * 0.86),
+          circ: Math.round(data.contribuyenteInfo.detalles.circulacion * 0.86),
+          aseo: Math.round(data.contribuyenteInfo.detalles.aseo * 0.86),
+          monthly: data.contribuyenteInfo.mensual.map(m => Math.round(m * 0.86))
         };
       }
 
+      // === Cálculo centralizado con BudgetEngine ===
+      const calc = BudgetEngine.calcularPresupuestoDinamico(2000);
+      const recItems = BudgetEngine.getRecaudacionItems(calc);
+      const sumTotal = calc.ingresos.total;
+      const totalVecinos = calc.escalado.total_vecinos;
+      const totalFCM = calc.ingresos.fcm;
+      const totalOtros = calc.ingresos.patentes + calc.ingresos.otros;
+      data.metadata.recaudacionTotal = sumTotal;
+
+      const ptcVecinos = sumTotal > 0 ? ((totalVecinos / sumTotal) * 100).toFixed(1) : 0;
+
+      // Gastos coherentes con la regla del 92%
+      const baseGastoTotal = calc.gastos.total;
+
+      // Cargar Gastos / Destino por Área
       let areas = data.destinoPorArea;
-      const offlineGastos = localStorage.getItem('transparencia_carga_gastos');
-      if (offlineGastos) {
+      const offlineGastos = BudgetEngine.getGastosAreas();
+      if (offlineGastos.length > 0) {
+        areas = offlineGastos.map(r => ({
+          area: r.area, icono: r.icono, color: r.color,
+          montoAsignado: BudgetEngine.cleanVal(r.monto_asignado), porcentaje: parseFloat(r.porcentaje),
+          descripcion: r.descripcion, subItems: []
+        }));
+      }
+
+      // Sanitizar areas
+      areas = areas.map(a => ({
+        area: a.area,
+        icono: a.icono,
+        color: a.color,
+        porcentaje: a.porcentaje,
+        descripcion: a.descripcion,
+        montoAsignado: a.montoAsignado || Math.round(baseGastoTotal * a.porcentaje / 100),
+        subItems: a.subItems || []
+      }));
+
+      // Cargar Proyectos (BudgetEngine centralizado)
+      let proyData = [];
+      const offlineProy = BudgetEngine.getProyectos();
+      if (offlineProy.length > 0) {
+        proyData = offlineProy.map(p => ({
+          id: p.codigo, nombre: p.nombre, area: p.area, monto: BudgetEngine.cleanVal(p.monto), porcentaje: parseFloat(p.porcentaje), estado: p.estado
+        }));
+      } else {
         try {
-          areas = JSON.parse(offlineGastos).map(r => ({
-            area: r.area, icono: r.icono, color: r.color,
-            montoAsignado: parseInt(r.monto_asignado), porcentaje: parseFloat(r.porcentaje),
-            descripcion: r.descripcion, subItems: []
-          }));
-        } catch (e) { console.warn("Error parsing offline gastos"); }
+          const apiProy = await App.loadJSON('../data/proyectos.json');
+          if (apiProy && apiProy.length > 0) proyData = apiProy;
+          else throw new Error("No data");
+        } catch (e) {
+          proyData = [
+            { id: 'P-2025-001', nombre: 'Alumbrado Público Costanera', area: 'Seguridad', monto: 185000000, porcentaje: 1.55, estado: 'Completado' },
+            { id: 'P-2025-002', nombre: 'Multicancha Las Acacias', area: 'Deporte', monto: 320000000, porcentaje: 2.42, estado: 'En Ejecución' },
+            { id: 'P-2025-003', nombre: 'Pavimento Av. Principal', area: 'Obras', monto: 450000000, porcentaje: 3.78, estado: 'Completado' },
+            { id: 'P-2025-004', nombre: 'Ampliación CESFAM', area: 'Salud', monto: 680000000, porcentaje: 4.28, estado: 'En Ejecución' },
+            { id: 'P-2025-005', nombre: 'Televigilancia Centro', area: 'Seguridad', monto: 220000000, porcentaje: 1.85, estado: 'Completado' },
+            { id: 'P-2025-006', nombre: 'Restauración Escuela', area: 'Educación', monto: 280000000, porcentaje: 1.64, estado: 'En Ejecución' },
+            { id: 'P-2025-007', nombre: 'Reciclaje Comunal', area: 'Medio Ambiente', monto: 95000000, porcentaje: 0.80, estado: 'Completado' },
+            { id: 'P-2025-008', nombre: 'Centro Adulto Mayor', area: 'Comunitario', monto: 150000000, porcentaje: 1.01, estado: 'En Ejecución' },
+            { id: 'P-2025-009', nombre: 'Borde Costero', area: 'Obras', monto: 520000000, porcentaje: 3.06, estado: 'En Ejecución' },
+            { id: 'P-2025-010', nombre: 'Digitalización Municipal', area: 'Admin', monto: 75000000, porcentaje: 0.63, estado: 'Completado' }
+          ];
+        }
+      }
+
+      // Cargar Servicios (BudgetEngine centralizado)
+      let servData = [];
+      const offlineServ = BudgetEngine.getServicios();
+      if (offlineServ.length > 0) {
+        servData = offlineServ.map(s => ({
+          servicio: s.servicio, proveedor: s.proveedor, monto: BudgetEngine.cleanVal(s.monto), porcentaje: parseFloat(s.porcentaje)
+        }));
+      } else {
+        try {
+          const apiServ = await App.loadJSON('../data/servicios.json');
+          if (apiServ && apiServ.length > 0) servData = apiServ;
+          else throw new Error("No data");
+        } catch (e) {
+          servData = [
+            { servicio: 'Recolección de Residuos', proveedor: 'Servicios Ambientales SpA', monto: 321000000, porcentaje: 2.69 },
+            { servicio: 'Mantención Alumbrado', proveedor: 'Enel Distribución', monto: 180000000, porcentaje: 1.51 },
+            { servicio: 'Aseo de Calles', proveedor: 'Limpieza Comunal S.A.', monto: 215000000, porcentaje: 1.80 },
+            { servicio: 'Seguridad Ciudadana', proveedor: 'Seguridad y Protección Limitada', monto: 280000000, porcentaje: 2.35 },
+            { servicio: 'Mantenimiento de Áreas Verdes', proveedor: 'Paisajismo Verde SpA', monto: 150000000, porcentaje: 1.26 },
+            { servicio: 'Mantenimiento de Vehículos', proveedor: 'Talleres Mecánicos del Sur', monto: 95000000, porcentaje: 0.80 },
+            { servicio: 'Provisión de Insumos Médicos', proveedor: 'Distribuidora Médica Nacional', monto: 420000000, porcentaje: 3.52 },
+            { servicio: 'Transporte Escolar', proveedor: 'Transportes Escolares Unidos', monto: 110000000, porcentaje: 0.92 },
+            { servicio: 'Soporte Informático', proveedor: 'Tecnologías y Sistemas S.A.', monto: 65000000, porcentaje: 0.55 },
+            { servicio: 'Servicios de Impresión', proveedor: 'Imprenta Rápida SpA', monto: 45000000, porcentaje: 0.38 }
+          ];
+        }
+      }
+
+      // Rellenar listas desplegables de filtros una sola vez
+      const filterRec = document.getElementById('filterRecaudacion');
+      if (filterRec) {
+        filterRec.innerHTML = '<option value="__all__">Todos los ítems</option>';
+        recItems.forEach(it => {
+          const o = document.createElement('option');
+          o.value = it.nombre;
+          o.textContent = it.nombre;
+          filterRec.appendChild(o);
+        });
+      }
+
+      const filterProy = document.getElementById('filterProyecto');
+      if (filterProy) {
+        filterProy.innerHTML = '<option value="__all__">Todos</option>';
+        proyData.forEach(p => {
+          const o = document.createElement('option');
+          o.value = p.nombre;
+          o.textContent = p.nombre;
+          filterProy.appendChild(o);
+        });
+      }
+
+      const filterServ = document.getElementById('filterServicio');
+      if (filterServ) {
+        filterServ.innerHTML = '<option value="__all__">Todos</option>';
+        servData.forEach(s => {
+          const o = document.createElement('option');
+          o.value = s.servicio;
+          o.textContent = s.servicio;
+          filterServ.appendChild(o);
+        });
       }
 
       // Helper para deshabilitar opciones de períodos no habilitados
@@ -511,6 +643,7 @@
         });
       }
 
+      // Función principal de renderizado dinámico
       function updateAll() {
         updateDropdownsDisabledState();
 
@@ -536,17 +669,41 @@
             <p style="font-size:0.95rem;margin:0"><strong>Este período de consulta se encuentra temporalmente suspendido.</strong><br>La información municipal de este período está en proceso de carga o auditoría financiera.</p>
           </div>`;
           document.getElementById('cardsPerCapita').innerHTML = '';
+
+          // Mostrar placeholders vacíos en el resto de pestañas cuando está deshabilitado
+          const disabledPlaceholder = `<div class="text-center text-muted py-5" style="border:2px dashed var(--gob-gray-border);border-radius:8px;background:#f8fafc"><span class="material-icons text-warning mb-2" style="font-size:2rem">lock</span><p style="font-size:0.95rem;margin:0">Información no disponible para el período seleccionado.</p></div>`;
+          document.getElementById('donutOrigenFondos').innerHTML = disabledPlaceholder;
+          document.getElementById('chartRecaudacion').innerHTML = disabledPlaceholder;
+          document.getElementById('donutChart').innerHTML = disabledPlaceholder;
+          document.getElementById('chartDestino').innerHTML = disabledPlaceholder;
+          document.getElementById('areaCards').innerHTML = '';
+
+          if (window._tables['tableOrigenFondos']) window._tables['tableOrigenFondos'].updateData([]);
+          if (window._tables['tableRecaudacion']) window._tables['tableRecaudacion'].updateData([]);
+          if (window._tables['tableProyectos']) window._tables['tableProyectos'].updateData([]);
+          if (window._tables['tableServicios']) window._tables['tableServicios'].updateData([]);
+
+          const lblPorcentaje = document.getElementById('lblPorcentajeVecinos');
+          const lblPresupuesto = document.getElementById('lblPresupuestoTotal');
+          if (lblPorcentaje) lblPorcentaje.textContent = '0%';
+          if (lblPresupuesto) lblPresupuesto.textContent = fmt(0);
           return;
         } else {
           alertBox.style.display = 'none';
         }
 
+        // Obtener factores de escala temporales para el año y mes seleccionado
+        const mult = multipliers[anio] || 1;
+        const divisor = mes === 'anual' ? 1 : 12;
+
         const ud = userData[anio] || userData['2025'];
         let userTotal = ud.contrib + ud.circ + ud.aseo;
-        let divisor = 1;
-        if (mes !== 'anual') { userTotal = ud.monthly[parseInt(mes) - 1]; divisor = 12; }
-        const promedioAnual = Math.round(data.metadata.recaudacionTotal / poblacion);
-        const promedio = Math.round(promedioAnual / (mes === 'anual' ? 1 : 12));
+        if (mes !== 'anual') { userTotal = ud.monthly[parseInt(mes) - 1]; }
+
+        const currentSumTotal = Math.round((sumTotal * mult) / divisor);
+        const currentGastoTotal = Math.round((baseGastoTotal * mult) / divisor);
+        const promedioAnual = Math.round((sumTotal * mult) / poblacion);
+        const promedio = Math.round(promedioAnual / divisor);
 
         document.getElementById('labelAnio').textContent = anio + (mes !== 'anual' ? ' - ' + document.getElementById('filterMes').selectedOptions[0].text : '');
         document.getElementById('userTotal').textContent = fmt(userTotal);
@@ -556,7 +713,14 @@
 
         document.getElementById('labelUserTotal2').textContent = fmt(userTotal);
 
-        // Per-area distribution of user's contribution
+        // Actualizar Context Card de forma dinámica e impecable con el porcentaje matemáticamente preciso
+        const userPtc = currentSumTotal > 0 ? ((userTotal / currentSumTotal) * 100).toFixed(4) : 0;
+        const lblPorcentaje = document.getElementById('lblPorcentajeVecinos');
+        const lblPresupuesto = document.getElementById('lblPresupuestoTotal');
+        if (lblPorcentaje) lblPorcentaje.textContent = userPtc + '%';
+        if (lblPresupuesto) lblPresupuesto.textContent = fmt(currentSumTotal);
+
+        // Distribución por área de la contribución del usuario
         const pcData = areas.map(a => ({
           area: a.area, icono: a.icono, color: a.color, porcentaje: a.porcentaje,
           montoUser: Math.round(userTotal * a.porcentaje / 100)
@@ -574,198 +738,229 @@
             <div style="font-size:.7rem;color:#999">${a.porcentaje}% de tu aporte</div>
           </div>
         </div>`).join('');
+
+        // === Origen de Fondos Dinámico (Tab 2) ===
+        const currentTotalVecinos = Math.round(totalVecinos * mult / divisor);
+        const currentTotalFCM = Math.round(totalFCM * mult / divisor);
+        const currentTotalOtros = Math.round(totalOtros * mult / divisor);
+
+        let currentOrigenData = [];
+        if (padron && padron.length > 0) {
+          currentOrigenData = [
+            { label: 'Aportes de Vecinos (Ingresos Propios)', percent: parseFloat(ptcVecinos), color: '#F77F00', monto: currentTotalVecinos },
+            { label: 'Fondo Común Municipal (FCM)', percent: 45.0, color: '#006FB3', monto: currentTotalFCM },
+            { label: 'Otras Transferencias / Ingresos', percent: 25.0, color: '#52B788', monto: currentTotalOtros }
+          ];
+        } else {
+          currentOrigenData = [
+            { label: 'Aportes de Vecinos (Ingresos Propios)', percent: parseFloat(currentSumTotal > 0 ? ((currentTotalVecinos / currentSumTotal) * 100).toFixed(1) : 0), color: '#F77F00', monto: currentTotalVecinos },
+            { label: 'Fondo Común Municipal (FCM)', percent: parseFloat(currentSumTotal > 0 ? ((currentTotalFCM / currentSumTotal) * 100).toFixed(1) : 0), color: '#006FB3', monto: currentTotalFCM },
+            { label: 'Otras Transferencias / Ingresos', percent: parseFloat(currentSumTotal > 0 ? ((currentTotalOtros / currentSumTotal) * 100).toFixed(1) : 0), color: '#52B788', monto: currentTotalOtros }
+          ];
+        }
+
+        const donutCont = document.getElementById('donutOrigenFondos');
+        if (donutCont) {
+          document.getElementById('donutOrigenFondos').innerHTML = '';
+          App.renderDonut('donutOrigenFondos', currentOrigenData.map(d => ({ percent: d.percent, color: d.color })));
+          
+          const mappedOrigenTableData = currentOrigenData.map(d => ({ origen: d.label, monto: d.monto, porcentaje: d.percent }));
+          if (window._tables['tableOrigenFondos']) {
+            window._tables['tableOrigenFondos'].updateData(mappedOrigenTableData);
+          } else {
+            window._tables['tableOrigenFondos'] = new DynamicTable('tableOrigenFondos', {
+              data: mappedOrigenTableData,
+              columns: [
+                { key: 'origen', label: 'Origen', type: 'text' },
+                { key: 'monto', label: 'Monto ($)', type: 'currency' },
+                { key: 'porcentaje', label: '%', type: 'percent' }
+              ]
+            });
+          }
+        }
+
+        // === Recaudación por Ítem Dinámica (Tab 2) ===
+        const currentRecItems = recItems.map(it => {
+          const scaledMonto = Math.round(it.monto * mult / divisor);
+          return {
+            nombre: it.nombre,
+            monto: scaledMonto,
+            porcentaje: currentSumTotal > 0 ? parseFloat(((scaledMonto / currentSumTotal) * 100).toFixed(2)) : 0
+          };
+        });
+
+        document.getElementById('chartRecaudacion').innerHTML = '';
+        App.renderBarChart('chartRecaudacion', currentRecItems.map((it, i) => ({ label: it.nombre, value: it.monto, color: colors[i % colors.length], percent: it.porcentaje })), { showPercent: true });
+
+        if (window._tables['tableRecaudacion']) {
+          const filterVal = document.getElementById('filterRecaudacion').value;
+          window._tables['tableRecaudacion'].updateData(filterVal === '__all__' ? currentRecItems : currentRecItems.filter(r => r.nombre === filterVal));
+        } else {
+          window._tables['tableRecaudacion'] = new DynamicTable('tableRecaudacion', {
+            data: currentRecItems,
+            columns: [
+              { key: 'nombre', label: 'Ítem', type: 'text' },
+              { key: 'monto', label: 'Monto ($)', type: 'currency' },
+              { key: 'porcentaje', label: '%', type: 'percent' }
+            ]
+          });
+        }
+
+        // === Destino por Área Dinámico (Tab 3) ===
+        const currentAreas = areas.map(a => {
+          const scaledMonto = Math.round(a.montoAsignado * mult / divisor);
+          return {
+            area: a.area,
+            icono: a.icono,
+            color: a.color,
+            montoAsignado: scaledMonto,
+            porcentaje: a.porcentaje,
+            descripcion: a.descripcion,
+            subItems: a.subItems.map(s => ({
+              nombre: s.nombre,
+              monto: Math.round(s.monto * mult / divisor)
+            }))
+          };
+        });
+
+        document.getElementById('chartDestino').innerHTML = '';
+        App.renderBarChart('chartDestino', currentAreas.map(a => ({ label: a.area, value: a.montoAsignado, color: a.color, percent: a.porcentaje })), { showPercent: true });
+
+        document.getElementById('donutChart').innerHTML = '';
+        App.renderDonut('donutChart', currentAreas.map(a => ({ percent: a.porcentaje, color: a.color })));
+
+        document.getElementById('areaCards').innerHTML = currentAreas.map(a => `
+        <div class="col-md-6 mb-3"><div class="info-card"><div class="area-header"><div class="area-icon" style="background:${a.color}"><span class="material-icons">${a.icono}</span></div><h4 class="area-name">${a.area}</h4><span class="area-percentage" style="color:${a.color}">${a.porcentaje}%</span></div>
+        <p style="font-size:.8rem;color:#4A4A4A">${a.descripcion}</p><div style="font-size:.875rem;font-weight:500;color:var(--gob-tertiary);margin-bottom:6px">${fmt(a.montoAsignado)} asignados</div>
+        <ul class="sub-items">${a.subItems.map(s => `<li><span>${s.nombre}</span><span style="font-family:'Roboto Mono';font-weight:500">${fmt(s.monto)}</span></li>`).join('')}</ul></div></div>`).join('');
+
+        // === % por Proyecto Dinámico (Tab 4) ===
+        const currentProyData = proyData.map(p => {
+          const scaledMonto = Math.round(p.monto * mult / divisor);
+          return {
+            id: p.id || p.codigo,
+            nombre: p.nombre,
+            area: p.area,
+            monto: scaledMonto,
+            porcentaje: currentGastoTotal > 0 ? parseFloat(((scaledMonto / currentGastoTotal) * 100).toFixed(2)) : 0,
+            estado: p.estado
+          };
+        });
+
+        if (window._tables['tableProyectos']) {
+          window._tables['tableProyectos'].updateData(currentProyData);
+          const filterVal = document.getElementById('filterProyecto').value;
+          window._tables['tableProyectos'].setFilter('nombre', filterVal);
+        } else {
+          window._tables['tableProyectos'] = new DynamicTable('tableProyectos', {
+            data: currentProyData,
+            columns: [
+              { key: 'id', label: 'ID', type: 'text' },
+              { key: 'nombre', label: 'Proyecto', type: 'text' },
+              { key: 'area', label: 'Área', type: 'text' },
+              { key: 'monto', label: 'Monto ($)', type: 'currency' },
+              { key: 'porcentaje', label: '%', type: 'percent' },
+              { key: 'estado', label: 'Estado', type: 'status' }
+            ]
+          });
+        }
+
+        // === % por Servicio Dinámico (Tab 5) ===
+        const currentServData = servData.map(s => {
+          const scaledMonto = Math.round(s.monto * mult / divisor);
+          return {
+            servicio: s.servicio,
+            proveedor: s.proveedor,
+            monto: scaledMonto,
+            porcentaje: currentGastoTotal > 0 ? parseFloat(((scaledMonto / currentGastoTotal) * 100).toFixed(2)) : 0
+          };
+        });
+
+        if (window._tables['tableServicios']) {
+          window._tables['tableServicios'].updateData(currentServData);
+          const filterVal = document.getElementById('filterServicio').value;
+          window._tables['tableServicios'].setFilter('servicio', filterVal);
+        } else {
+          window._tables['tableServicios'] = new DynamicTable('tableServicios', {
+            data: currentServData,
+            columns: [
+              { key: 'servicio', label: 'Servicio', type: 'text' },
+              { key: 'proveedor', label: 'Proveedor', type: 'text' },
+              { key: 'monto', label: 'Monto ($)', type: 'currency' },
+              { key: 'porcentaje', label: '%', type: 'percent' }
+            ]
+          });
+        }
       }
+
+      // Registrar los escuchas de eventos de filtros generales
       document.getElementById('filterAnio').addEventListener('change', updateAll);
       document.getElementById('filterMes').addEventListener('change', updateAll);
-      updateAll();
 
-      // === Recaudación por Ítem ===
-      let recItems = data.resumenRecaudacion.items;
-      const offlineRec = localStorage.getItem('transparencia_carga_recaudacion');
-      if (offlineRec) {
-        try {
-          recItems = JSON.parse(offlineRec).map(r => ({ nombre: r.nombre, monto: parseInt(r.monto), porcentaje: parseFloat(r.porcentaje) }));
-        } catch (e) { }
-      }
+      // Escuchas específicos para controles internos de pestañas
+      if (filterRec) {
+        filterRec.addEventListener('change', e => {
+          const v = e.target.value;
+          const anio = document.getElementById('filterAnio').value;
+          const mes = document.getElementById('filterMes').value;
+          const mult = multipliers[anio] || 1;
+          const divisor = mes === 'anual' ? 1 : 12;
+          const currentSumTotal = Math.round((sumTotal * mult) / divisor);
 
-      // === Origen de Fondos (Opción 1 y 2) y Coherencia de Padrón ===
-      let totalVecinos = 0;
-      let totalFCM = 0;
-      let totalOtros = 0;
-
-      // Si hay padrón offline, sobrescribimos los ingresos propios en recItems para mantener coherencia matemática
-      let padron = [];
-      try {
-        const storedP = localStorage.getItem('transparencia_carga_contribuyentes');
-        if (storedP) padron = JSON.parse(storedP);
-      } catch (e) { }
-
-      let padronTotal = 0;
-      if (padron && padron.length > 0) {
-        let sumContrib = 0, sumCirc = 0, sumAseo = 0;
-        padron.forEach(c => {
-          sumContrib += parseInt(c.aporte_contribucion) || 0;
-          sumCirc += parseInt(c.aporte_circulacion) || 0;
-          sumAseo += parseInt(c.aporte_aseo) || 0;
-        });
-        padronTotal = sumContrib + sumCirc + sumAseo;
-        
-        // Actualizar los ítems de recaudación dinámicamente y hacer que el total sea SOLO el padrón (por requerimiento del demo)
-        recItems = [
-          { "nombre": "Impuesto Territorial", "monto": sumContrib, "porcentaje": 0 },
-          { "nombre": "Permisos de Circulación", "monto": sumCirc, "porcentaje": 0 },
-          { "nombre": "Derechos de Aseo", "monto": sumAseo, "porcentaje": 0 }
-        ];
-        totalVecinos = padronTotal;
-        totalFCM = 0;
-        totalOtros = 0;
-      } else {
-        recItems.forEach(it => {
-          const n = it.nombre.toLowerCase();
-          if (n.includes('contribucion') || n.includes('circulacion') || n.includes('aseo') || n.includes('patente') || n.includes('territorial')) {
-            totalVecinos += it.monto;
-          } else if (n.includes('fondo comun') || n.includes('fcm')) {
-            totalFCM += it.monto;
-          } else {
-            totalOtros += it.monto;
-          }
+          const currentRecItems = recItems.map(it => {
+            const scaledMonto = Math.round(it.monto * mult / divisor);
+            return {
+              nombre: it.nombre,
+              monto: scaledMonto,
+              porcentaje: currentSumTotal > 0 ? parseFloat(((scaledMonto / currentSumTotal) * 100).toFixed(2)) : 0
+            };
+          });
+          window._tables['tableRecaudacion'].updateData(v === '__all__' ? currentRecItems : currentRecItems.filter(r => r.nombre === v));
         });
       }
 
-      const sumTotal = totalVecinos + totalFCM + totalOtros;
+      if (filterProy) {
+        filterProy.addEventListener('change', e => window._tables['tableProyectos'].setFilter('nombre', e.target.value));
+      }
 
-      // Recalcular porcentajes de recItems ahora que sumTotal y montos cambiaron
-      recItems.forEach(it => {
-        it.porcentaje = sumTotal > 0 ? parseFloat(((it.monto / sumTotal) * 100).toFixed(2)) : 0;
+      if (filterServ) {
+        filterServ.addEventListener('change', e => window._tables['tableServicios'].setFilter('servicio', e.target.value));
+      }
+
+      // Escucha de cambio de pestaña para activar transiciones en gráficos y donuts SVG (ISO UX compliance)
+      $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+        const activeTabId = $(e.target).attr('href');
+        const activePanel = document.querySelector(activeTabId);
+        if (activePanel) {
+          // Animar gráficos de barra
+          activePanel.querySelectorAll('.bar-fill').forEach(bar => {
+            const w = bar.style.width;
+            bar.style.width = '0%';
+            bar.offsetHeight; // Forzar reflow
+            bar.style.width = w;
+          });
+          // Animar gráficos de donut (SVG)
+          activePanel.querySelectorAll('svg circle[stroke-dasharray]').forEach(circle => {
+            const dashArray = circle.getAttribute('stroke-dasharray');
+            const dashOffset = circle.getAttribute('stroke-dashoffset');
+            if (dashArray && dashOffset) {
+              const r = parseFloat(circle.getAttribute('r'));
+              const circ = 2 * Math.PI * r;
+              circle.setAttribute('stroke-dasharray', `0 ${circ}`);
+              circle.setAttribute('stroke-dashoffset', '0');
+              circle.offsetHeight; // Forzar reflow
+              circle.setAttribute('stroke-dasharray', dashArray);
+              circle.setAttribute('stroke-dashoffset', dashOffset);
+            }
+          });
+          activePanel.querySelectorAll('.animate-on-scroll').forEach(el => {
+            el.classList.add('animate-in');
+          });
+        }
       });
 
-      const ptcVecinos = sumTotal > 0 ? ((totalVecinos / sumTotal) * 100).toFixed(1) : 0;
-
-      // Fill Context Card (Option 2)
-      const lblPorcentaje = document.getElementById('lblPorcentajeVecinos');
-      const lblPresupuesto = document.getElementById('lblPresupuestoTotal');
-      
-      const annualUserTotal = userData['2025'].contrib + userData['2025'].circ + userData['2025'].aseo;
-      const factorEscala = sumTotal > 100000000 ? 2000 : 1;
-      const userPtc = sumTotal > 0 ? (((annualUserTotal * factorEscala) / sumTotal) * 100).toFixed(1) : 0;
-      
-      if (lblPorcentaje) lblPorcentaje.textContent = userPtc + '%';
-      if (lblPresupuesto) lblPresupuesto.textContent = fmt(sumTotal);
-
-      // Render Doughnut y Tabla (Opción 1)
-      let origenData = [];
-      if (padron && padron.length > 0) {
-         origenData = [
-           { label: 'Aportes de Vecinos (Padrón Demo)', percent: 100, color: '#F77F00', monto: padronTotal }
-         ];
-      } else {
-         origenData = [
-           { label: 'Aportes de Vecinos (Ingresos Propios)', percent: parseFloat(ptcVecinos), color: '#F77F00', monto: totalVecinos },
-           { label: 'Fondo Común Municipal (FCM)', percent: parseFloat(sumTotal > 0 ? ((totalFCM / sumTotal) * 100).toFixed(1) : 0), color: '#006FB3', monto: totalFCM },
-           { label: 'Otras Transferencias / Ingresos', percent: parseFloat(sumTotal > 0 ? ((totalOtros / sumTotal) * 100).toFixed(1) : 0), color: '#52B788', monto: totalOtros }
-         ];
-      }
-      const donutCont = document.getElementById('donutOrigenFondos');
-      if (donutCont) {
-        App.renderDonut('donutOrigenFondos', origenData.map(d => ({ percent: d.percent, color: d.color })));
-        window._tables['tableOrigenFondos'] = new DynamicTable('tableOrigenFondos', {
-          data: origenData.map(d => ({ origen: d.label, monto: d.monto, porcentaje: d.percent })),
-          columns: [
-            { key: 'origen', label: 'Origen', type: 'text' },
-            { key: 'monto', label: 'Monto ($)', type: 'currency' },
-            { key: 'porcentaje', label: '%', type: 'percent' }
-          ]
-        });
-      }
-      const filterRec = document.getElementById('filterRecaudacion');
-      recItems.forEach(it => { const o = document.createElement('option'); o.value = it.nombre; o.textContent = it.nombre; filterRec.appendChild(o); });
-      App.renderBarChart('chartRecaudacion', recItems.map((it, i) => ({ label: it.nombre, value: it.monto, color: colors[i % colors.length], percent: it.porcentaje })), { showPercent: true });
-      window._tables['tableRecaudacion'] = new DynamicTable('tableRecaudacion', { data: recItems, columns: [{ key: 'nombre', label: 'Ítem', type: 'text' }, { key: 'monto', label: 'Monto ($)', type: 'currency' }, { key: 'porcentaje', label: '%', type: 'percent' }] });
-      filterRec.addEventListener('change', e => { const v = e.target.value; window._tables['tableRecaudacion'].updateData(v === '__all__' ? recItems : recItems.filter(r => r.nombre === v)); });
-
-      // === Destino por Área ===
-      App.renderBarChart('chartDestino', areas.map(a => ({ label: a.area, value: a.montoAsignado, color: a.color, percent: a.porcentaje })), { showPercent: true });
-      App.renderDonut('donutChart', areas.map(a => ({ percent: a.porcentaje, color: a.color })));
-      document.getElementById('areaCards').innerHTML = areas.map(a => `
-      <div class="col-md-6 mb-3"><div class="info-card"><div class="area-header"><div class="area-icon" style="background:${a.color}"><span class="material-icons">${a.icono}</span></div><h4 class="area-name">${a.area}</h4><span class="area-percentage" style="color:${a.color}">${a.porcentaje}%</span></div>
-      <p style="font-size:.8rem;color:#4A4A4A">${a.descripcion}</p><div style="font-size:.875rem;font-weight:500;color:var(--gob-tertiary);margin-bottom:6px">${fmt(a.montoAsignado)} asignados</div>
-      <ul class="sub-items">${a.subItems.map(s => `<li><span>${s.nombre}</span><span style="font-family:'Roboto Mono';font-weight:500">${fmt(s.monto)}</span></li>`).join('')}</ul></div></div>`).join('');
-
-      // === % por Proyecto ===
-      let proyData = [];
-      const offlineProy = localStorage.getItem('transparencia_carga_proyectos');
-      if (offlineProy) {
-        try {
-          proyData = JSON.parse(offlineProy).map(p => ({
-            id: p.codigo, nombre: p.nombre, area: p.area, monto: parseInt(p.monto), porcentaje: parseFloat(p.porcentaje), estado: p.estado
-          }));
-        } catch (e) { }
-      } else {
-        try {
-          const apiProy = await App.loadJSON('../data/proyectos.json');
-          if (apiProy && apiProy.length > 0) {
-            proyData = apiProy;
-          } else {
-            throw new Error("No data returned");
-          }
-        } catch (e) {
-          proyData = [
-            { id: 'P-2025-001', nombre: 'Alumbrado Público Costanera', area: 'Seguridad', monto: 185000000, porcentaje: 1.55, estado: 'Completado' },
-            { id: 'P-2025-002', nombre: 'Multicancha Las Acacias', area: 'Deporte', monto: 320000000, porcentaje: 2.42, estado: 'En Ejecución' },
-            { id: 'P-2025-003', nombre: 'Pavimento Av. Principal', area: 'Obras', monto: 450000000, porcentaje: 3.78, estado: 'Completado' },
-            { id: 'P-2025-004', nombre: 'Ampliación CESFAM', area: 'Salud', monto: 680000000, porcentaje: 4.28, estado: 'En Ejecución' },
-            { id: 'P-2025-005', nombre: 'Televigilancia Centro', area: 'Seguridad', monto: 220000000, porcentaje: 1.85, estado: 'Completado' },
-            { id: 'P-2025-006', nombre: 'Restauración Escuela', area: 'Educación', monto: 280000000, porcentaje: 1.64, estado: 'En Ejecución' },
-            { id: 'P-2025-007', nombre: 'Reciclaje Comunal', area: 'Medio Ambiente', monto: 95000000, porcentaje: 0.80, estado: 'Completado' },
-            { id: 'P-2025-008', nombre: 'Centro Adulto Mayor', area: 'Comunitario', monto: 150000000, porcentaje: 1.01, estado: 'En Ejecución' },
-            { id: 'P-2025-009', nombre: 'Borde Costero', area: 'Obras', monto: 520000000, porcentaje: 3.06, estado: 'En Ejecución' },
-            { id: 'P-2025-010', nombre: 'Digitalización Municipal', area: 'Admin', monto: 75000000, porcentaje: 0.63, estado: 'Completado' }
-          ];
-        }
-      }
-      const filterProy = document.getElementById('filterProyecto');
-      filterProy.innerHTML = '<option value="__all__">Todos</option>';
-      proyData.forEach(p => { const o = document.createElement('option'); o.value = p.nombre; o.textContent = p.nombre; filterProy.appendChild(o); });
-      window._tables['tableProyectos'] = new DynamicTable('tableProyectos', { data: proyData, columns: [{ key: 'id', label: 'ID', type: 'text' }, { key: 'nombre', label: 'Proyecto', type: 'text' }, { key: 'area', label: 'Área', type: 'text' }, { key: 'monto', label: 'Monto ($)', type: 'currency' }, { key: 'porcentaje', label: '%', type: 'percent' }, { key: 'estado', label: 'Estado', type: 'status' }] });
-      filterProy.addEventListener('change', e => window._tables['tableProyectos'].setFilter('nombre', e.target.value));
-
-      // === % por Servicio ===
-      let servData = [];
-      const offlineServ = localStorage.getItem('transparencia_carga_servicios');
-      if (offlineServ) {
-        try {
-          servData = JSON.parse(offlineServ).map(s => ({
-            servicio: s.servicio, proveedor: s.proveedor, monto: parseInt(s.monto), porcentaje: parseFloat(s.porcentaje)
-          }));
-        } catch (e) { }
-      } else {
-        try {
-          const apiServ = await App.loadJSON('../data/servicios.json');
-          if (apiServ && apiServ.length > 0) {
-            servData = apiServ;
-          } else {
-            throw new Error("No data returned");
-          }
-        } catch (e) {
-          servData = [
-            { servicio: 'Recolección de Residuos', proveedor: 'Servicios Ambientales SpA', monto: 321000000, porcentaje: 2.69 },
-            { servicio: 'Mantención Alumbrado', proveedor: 'Enel Distribución', monto: 180000000, porcentaje: 1.51 },
-            { servicio: 'Aseo de Calles', proveedor: 'Limpieza Comunal S.A.', monto: 215000000, porcentaje: 1.80 },
-            { servicio: 'Seguridad Ciudadana', proveedor: 'Seguridad y Protección Limitada', monto: 280000000, porcentaje: 2.35 },
-            { servicio: 'Mantenimiento de Áreas Verdes', proveedor: 'Paisajismo Verde SpA', monto: 150000000, porcentaje: 1.26 },
-            { servicio: 'Mantenimiento de Vehículos', proveedor: 'Talleres Mecánicos del Sur', monto: 95000000, porcentaje: 0.80 },
-            { servicio: 'Provisión de Insumos Médicos', proveedor: 'Distribuidora Médica Nacional', monto: 420000000, porcentaje: 3.52 },
-            { servicio: 'Transporte Escolar', proveedor: 'Transportes Escolares Unidos', monto: 110000000, porcentaje: 0.92 },
-            { servicio: 'Soporte Informático', proveedor: 'Tecnologías y Sistemas S.A.', monto: 65000000, porcentaje: 0.55 },
-            { servicio: 'Servicios de Impresión', proveedor: 'Imprenta Rápida SpA', monto: 45000000, porcentaje: 0.38 }
-          ];
-        }
-      }
-      const filterServ = document.getElementById('filterServicio');
-      filterServ.innerHTML = '<option value="__all__">Todos</option>';
-      servData.forEach(s => { const o = document.createElement('option'); o.value = s.servicio; o.textContent = s.servicio; filterServ.appendChild(o); });
-      window._tables['tableServicios'] = new DynamicTable('tableServicios', { data: servData, columns: [{ key: 'servicio', label: 'Servicio', type: 'text' }, { key: 'proveedor', label: 'Proveedor', type: 'text' }, { key: 'monto', label: 'Monto ($)', type: 'currency' }, { key: 'porcentaje', label: '%', type: 'percent' }] });
-      filterServ.addEventListener('change', e => window._tables['tableServicios'].setFilter('servicio', e.target.value));
+      // Lanzar el renderizado inicial unificado
+      updateAll();
     });
   </script>
 </body>

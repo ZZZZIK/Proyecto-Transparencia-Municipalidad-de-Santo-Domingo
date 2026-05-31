@@ -276,9 +276,49 @@
   </footer>
 
   <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="../js/budget-engine.js"></script>
   <script src="../js/app.js"></script>
   <script>
+    // Función de validación de RUN chileno (Algoritmo Módulo 11) - ISO 27001/27701 Security Control
+    function validateRut(rutComplete) {
+      if (!rutComplete || typeof rutComplete !== 'string') return false;
+      
+      const clean = rutComplete.replace(/[^0-9kK]/g, '').toUpperCase();
+      if (clean.length < 8 || clean.length > 9) return false;
+      
+      const body = clean.slice(0, -1);
+      const dv = clean.slice(-1);
+      
+      let sum = 0;
+      let multiplier = 2;
+      
+      for (let i = body.length - 1; i >= 0; i--) {
+        sum += parseInt(body.charAt(i), 10) * multiplier;
+        multiplier = multiplier === 7 ? 2 : multiplier + 1;
+      }
+      
+      const expectedDv = 11 - (sum % 11);
+      let expectedDvStr = '';
+      if (expectedDv === 11) expectedDvStr = '0';
+      else if (expectedDv === 10) expectedDvStr = 'K';
+      else expectedDvStr = expectedDv.toString();
+      
+      return expectedDvStr === dv;
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
+      // Verificar si el usuario ya está autenticado (Evitar doble inicio de sesión)
+      if (typeof App !== 'undefined' && App.isLoggedIn()) {
+        const session = App.getUserSession();
+        if (session) {
+          console.log("Usuario ya autenticado, redirigiendo a su dashboard...");
+          const urlParams = new URLSearchParams(window.location.search);
+          const redirectPage = urlParams.get('redirect') || 'destino-impuestos.html';
+          window.location.href = redirectPage;
+          return;
+        }
+      }
+
       const form = document.getElementById('loginForm');
       const rutInput = document.getElementById('rutInput');
       const passwordInput = document.getElementById('passwordInput');
@@ -288,21 +328,48 @@
       const spinner = document.getElementById('btnSpinner');
       const btnText = document.getElementById('btnText');
 
-      // 1. Formateador automático de RUT chileno mientras escribe
+      // 1. Formateador automático y sanitizador de RUT chileno mientras escribe
       rutInput.addEventListener('input', (e) => {
         let value = e.target.value.replace(/[^0-9kK]/g, ''); // Solo números y K
+        
+        // Limitar longitud a un RUT máximo (9 caracteres sin formato, ej: 12345678K)
+        if (value.length > 9) {
+          value = value.slice(0, 9);
+        }
+
         if (value.length === 0) {
           e.target.value = '';
           return;
         }
         
-        let dv = value.slice(-1);
-        let rut = value.slice(0, -1);
+        // Sanitizar e impedir letras 'K' internas (solo se permite K en la posición de DV al final)
+        let cleanValue = '';
+        for (let i = 0; i < value.length; i++) {
+          const char = value[i];
+          if (char.toLowerCase() === 'k') {
+            if (i === value.length - 1) {
+              cleanValue += 'K';
+            }
+          } else {
+            cleanValue += char;
+          }
+        }
+
+        if (cleanValue.length === 0) {
+          e.target.value = '';
+          return;
+        }
+
+        let dv = cleanValue.slice(-1);
+        let rut = cleanValue.slice(0, -1);
         
         if (rut.length > 0) {
-          // Formatear con puntos
-          let formatted = new Intl.NumberFormat('es-CL').format(rut);
-          e.target.value = formatted + '-' + dv;
+          if (/^\d+$/.test(rut)) {
+            let formatted = new Intl.NumberFormat('es-CL').format(parseInt(rut, 10));
+            e.target.value = formatted + '-' + dv;
+          } else {
+            e.target.value = rut + '-' + dv;
+          }
         } else {
           e.target.value = dv;
         }
@@ -330,6 +397,17 @@
           spinner.style.display = 'none';
           btnText.textContent = 'Autenticar';
         };
+
+        const cleanRut = rut.replace(/[^0-9kK]/g, '').toLowerCase();
+        const isMockUser = (cleanRut === '123456789' && password === 'Pb_123@01') || 
+                           (cleanRut === '892342554' && password === 'Pb_321@02') || 
+                           (cleanRut === '87654321' && password === 'Pb_123@03');
+
+        // Validar RUN chileno mediante Módulo 11 (excepto para usuarios de prueba para garantizar compatibilidad)
+        if (!isMockUser && !validateRut(rut)) {
+          showError('El RUN ingresado no es válido. Por favor, verifique el número y dígito verificador.');
+          return;
+        }
 
         let sessionData = null;
 
@@ -364,11 +442,6 @@
             throw new Error("ServerError");
           }
         } catch (error) {
-          const cleanRut = rut.replace(/[^0-9kK]/g, '').toLowerCase();
-          const isMockUser = (cleanRut === '123456789' && password === 'Pb_123@01') || 
-                             (cleanRut === '892342554' && password === 'Pb_321@02') || 
-                             (cleanRut === '87654321' && password === 'Pb_123@03');
-
           // Si es un error de credenciales reales (401), lo mostramos y no simulamos
           // EXCEPTO si ingresó exactamente las credenciales de prueba
           if (!isMockUser && error.message && error.message !== "LocalFileProtocol" && error.message !== "ServerError" && !error.message.includes("fetch") && !error.message.includes("JSON")) {
@@ -376,72 +449,35 @@
             return;
           }
 
-          console.warn("Iniciando simulación local segura (Graceful Fallback)...");
-          
-          // === Leer padrón de contribuyentes subido desde el admin ===
-          let padronLocal = [];
-          try {
-            const storedP = localStorage.getItem('transparencia_carga_contribuyentes');
-            if (storedP) padronLocal = JSON.parse(storedP);
-          } catch(e) {}
-
-          // Helper: buscar contribuyente en el padrón local por RUT limpio
-          function findInPadron(cleanRutTarget) {
-            return padronLocal.find(c => {
-              const cRut = (c.rut || '').replace(/[^0-9kK]/g, '').toLowerCase();
-              return cRut === cleanRutTarget;
-            });
+          // Si el servidor no está disponible y no es un usuario mock, mostrar error de red consistente
+          if (!isMockUser) {
+            showError('Error de conexión con el servidor. Por favor, intente más tarde o consulte con el administrador.');
+            return;
           }
 
+          console.warn("Iniciando simulación local segura (Graceful Fallback)...");
+          
           if (cleanRut === '123456789' && password === 'Pb_123@01') {
-            // Usuario A: Alonso
-            const padronEntry = findInPadron('123456789');
-            let aCont, aCirc, aAseo;
-            if (padronEntry) {
-              aCont = parseInt(padronEntry.aporte_contribucion) || 0;
-              aCirc = parseInt(padronEntry.aporte_circulacion) || 0;
-              aAseo = parseInt(padronEntry.aporte_aseo) || 0;
-            } else {
-              aCont = 485000; aCirc = 165000; aAseo = 78000;
-            }
-            const total = aCont + aCirc + aAseo;
-            const mes = Math.round(total / 12);
-
+            // Usuario A: Alonso — datos desde BudgetEngine
+            const uData = BudgetEngine.buildContribuyenteSession('123456789', {
+              nombre: 'Alonso Alexander Maurel Murgas', rut: '12.345.678-9',
+              contrib: 485000, circ: 165000, aseo: 78000,
+              mensual: [58000,58000,62000,60000,65000,60000,62000,63000,58000,62000,60000,60000]
+            });
             sessionData = {
               token: 'offline_token_a_12345',
-              user: {
-                nombre: padronEntry ? padronEntry.nombre : 'Alonso Alexander Maurel Murgas',
-                rut: '12.345.678-9',
-                rol: 'ciudadano',
-                recaudacionTotalUsuario: total,
-                detalles: { contribucion: aCont, circulacion: aCirc, aseo: aAseo },
-                mensual: Array(12).fill(mes)
-              }
+              user: { ...uData, rol: 'ciudadano' }
             };
           } else if (cleanRut === '892342554' && password === 'Pb_321@02') {
-            // Usuario B: Sofía
-            const padronEntry = findInPadron('892342554');
-            let aCont, aCirc, aAseo;
-            if (padronEntry) {
-              aCont = parseInt(padronEntry.aporte_contribucion) || 0;
-              aCirc = parseInt(padronEntry.aporte_circulacion) || 0;
-              aAseo = parseInt(padronEntry.aporte_aseo) || 0;
-            } else {
-              aCont = 1400000; aCirc = 500000; aAseo = 100000;
-            }
-            const total = aCont + aCirc + aAseo;
-            const mes = Math.round(total / 12);
-
+            // Usuario B: Sofía — datos desde BudgetEngine
+            const uData = BudgetEngine.buildContribuyenteSession('892342554', {
+              nombre: 'Sofía Elizabeth Álvarez Pérez', rut: '89.234.255-4',
+              contrib: 3500000, circ: 1200000, aseo: 300000,
+              mensual: [400000,420000,410000,430000,420000,410000,420000,430000,410000,420000,410000,420000]
+            });
             sessionData = {
               token: 'offline_token_b_67890',
-              user: {
-                nombre: padronEntry ? padronEntry.nombre : 'Sofía Elizabeth Álvarez Pérez',
-                rut: '89.234.255-4',
-                rol: 'ciudadano',
-                recaudacionTotalUsuario: total,
-                detalles: { contribucion: aCont, circulacion: aCirc, aseo: aAseo },
-                mensual: Array(12).fill(mes)
-              }
+              user: { ...uData, rol: 'ciudadano' }
             };
           } else if (cleanRut === '87654321' && password === 'Pb_123@03') {
             sessionData = {
@@ -463,6 +499,7 @@
 
         // Si tenemos datos de sesión válidos (ya sea de API o simulación local)
         if (sessionData) {
+          sessionData.timestamp = Date.now(); // Añadir timestamp para control de inactividad (ISO 27001)
           sessionStorage.setItem('transparencia_session', JSON.stringify(sessionData));
           btnText.textContent = '¡Éxito! Redirigiendo...';
           const urlParams = new URLSearchParams(window.location.search);
