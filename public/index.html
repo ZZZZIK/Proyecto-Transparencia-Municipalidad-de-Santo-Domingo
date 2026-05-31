@@ -83,26 +83,26 @@
       <div class="row">
         <div class="col-6 col-md-3 mb-3">
           <div class="stat-card animate-in">
-            <div class="stat-value" style="color:#2E86AB">$12.850M</div>
+            <div class="stat-value" style="color:#2E86AB">$38.187M</div>
             <div class="stat-label">Recaudación 2025</div>
             <span class="stat-change up">↑ 8.2%</span>
           </div>
         </div>
         <div class="col-6 col-md-3 mb-3">
           <div class="stat-card animate-in animate-delay-1">
-            <div class="stat-value" style="color:#52B788">$11.920M</div>
+            <div class="stat-value" style="color:#52B788">$32.186M</div>
             <div class="stat-label">Gasto Ejecutado</div>
           </div>
         </div>
         <div class="col-6 col-md-3 mb-3">
           <div class="stat-card animate-in animate-delay-2">
-            <div class="stat-value" style="color:#F77F00">92.7%</div>
+            <div class="stat-value" style="color:#F77F00">91.6%</div>
             <div class="stat-label">Ejecución Presupuestaria</div>
           </div>
         </div>
         <div class="col-6 col-md-3 mb-3">
           <div class="stat-card animate-in animate-delay-3">
-            <div class="stat-value" style="color:#7209B7">$1.311.224</div>
+            <div class="stat-value" style="color:#7209B7">$3.896.599</div>
             <div class="stat-label">Aporte por Habitante</div>
           </div>
         </div>
@@ -130,7 +130,7 @@
           <div class="card-icon" style="background:#006FB3"><span class="material-icons">pie_chart</span></div>
           <div class="card-title">Presupuesto Municipal</div>
           <div class="card-desc">Presupuesto asignado, nivel de ejecución presupuestaria y distribución del gasto por área de inversión del municipio. Comparativa entre montos asignados y ejecutados.</div>
-          <div class="card-meta"><span>Año 2025</span><span class="card-count" style="background:rgba(0,111,179,0.1);color:#006FB3">92.7% ejecución</span></div>
+          <div class="card-meta"><span>Año 2025</span><span class="card-count" style="background:rgba(0,111,179,0.1);color:#006FB3">91.6% ejecución</span></div>
         </a>
       </div>
     </section>
@@ -229,6 +229,47 @@
           }
         }
       }
+
+      // Cargar datos reales y escalados de la API para las tarjetas de estadísticas del Home
+      App.loadJSON('data/contribuyentes_resumen.json').then(data => {
+        if (data) {
+          const totalIngresos = data.presupuesto_total_ingresos || 38186666667;
+          const totalIngresosM = (totalIngresos / 1000000000).toFixed(3).replace('.', ',') + 'M';
+          const cards = document.querySelectorAll('.stat-card');
+          if (cards.length >= 4) {
+            cards[0].querySelector('.stat-value').textContent = '$' + totalIngresosM;
+            
+            App.loadJSON('data/presupuesto.json').then(presData => {
+              let totalEjecutado = 0;
+              let totalAsignado = 0;
+              if (presData && presData.length > 0) {
+                presData.forEach(it => {
+                  totalEjecutado += it.ejecutado;
+                  totalAsignado += it.asignado;
+                });
+              } else {
+                totalAsignado = data.presupuesto_total_gastos || 35131733334;
+                totalEjecutado = Math.round(totalAsignado * 0.91614);
+              }
+              const totalEjecutadoM = (totalEjecutado / 1000000000).toFixed(3).replace('.', ',') + 'M';
+              cards[1].querySelector('.stat-value').textContent = '$' + totalEjecutadoM;
+              
+              const pctEjec = totalAsignado > 0 ? (totalEjecutado / totalAsignado * 100).toFixed(1) + '%' : '91.6%';
+              cards[2].querySelector('.stat-value').textContent = pctEjec;
+              
+              const cardPresBadge = document.querySelector('#card-presupuesto .card-count');
+              if (cardPresBadge) {
+                cardPresBadge.textContent = pctEjec + ' ejecución';
+              }
+            });
+            
+            const aportePorHabitante = Math.round(totalIngresos / 9800);
+            cards[3].querySelector('.stat-value').textContent = '$' + new Intl.NumberFormat('es-CL').format(aportePorHabitante);
+          }
+        }
+      }).catch(err => {
+        console.warn("No se pudo cargar el presupuesto dinámico de forma dinámica para las tarjetas de estadísticas:", err);
+      });
     });
   </script>
 </body>

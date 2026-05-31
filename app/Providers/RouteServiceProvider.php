@@ -22,6 +22,31 @@ class RouteServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Configurar valores por defecto de autenticación para evitar "Auth guard [] is not defined"
+        config([
+            'auth.defaults.guard' => 'web',
+            'auth.guards.web' => [
+                'driver' => 'session',
+                'provider' => 'users',
+            ],
+            'auth.providers.users' => [
+                'driver' => 'eloquent',
+                'model' => \App\Models\Contribuyente::class,
+            ],
+        ]);
+
+        // Registrar middleware groups y aliases dinámicamente para compensar la falta de Kernel.php
+        Route::aliasMiddleware('throttle', \Illuminate\Routing\Middleware\ThrottleRequests::class);
+        Route::aliasMiddleware('bindings', \Illuminate\Routing\Middleware\SubstituteBindings::class);
+        
+        Route::middlewareGroup('api', [
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+        ]);
+        
+        Route::middlewareGroup('web', [
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+        ]);
+
         // Configurar límite de peticiones (Rate Limiters)
         $this->configureRateLimiting();
 

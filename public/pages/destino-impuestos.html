@@ -646,7 +646,8 @@
       const lblPresupuesto = document.getElementById('lblPresupuestoTotal');
       
       const annualUserTotal = userData['2025'].contrib + userData['2025'].circ + userData['2025'].aseo;
-      const userPtc = sumTotal > 0 ? ((annualUserTotal / sumTotal) * 100).toFixed(1) : 0;
+      const factorEscala = sumTotal > 100000000 ? 2000 : 1;
+      const userPtc = sumTotal > 0 ? (((annualUserTotal * factorEscala) / sumTotal) * 100).toFixed(1) : 0;
       
       if (lblPorcentaje) lblPorcentaje.textContent = userPtc + '%';
       if (lblPresupuesto) lblPresupuesto.textContent = fmt(sumTotal);

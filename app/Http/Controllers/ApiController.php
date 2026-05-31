@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Contribuyente;
 
-class ApiController extends Controller
+class ApiController extends \Illuminate\Routing\Controller
 {
     /**
      * Helper para formatear montos en CLP (Peso Chileno).
@@ -24,46 +24,103 @@ class ApiController extends Controller
     public function getDestinoImpuestos(Request $request)
     {
         try {
-            // 1. Obtener Metadatos Generales
+            // 1. Obtener Metadatos Generales desde Base de Datos
             $metadata = DB::table('metadata')->first();
             if (!$metadata) {
                 throw new \Exception("Base de datos vacía o no migrada.");
             }
 
-            // 2. Obtener Recaudación por Ítem
-            $recaudacionItems = DB::table('recaudacion_items')
-                ->select('nombre', 'monto', 'porcentaje')
-                ->get();
+            // Realizar cálculo dinámico centralizado
+            $calc = $this->calcularPresupuestoDinamico(2000);
+            $totalIngresos = $calc['ingresos']['total'];
+            $totalGastos = $calc['gastos']['total'];
 
-            // 3. Obtener Destino por Área y sus Sub-ítems
+            // 2. Generar Recaudación por Ítem Dinámica y Proporcional
+            $recaudacionItems = [
+                [
+                    'nombre' => 'Impuesto Territorial',
+                    'monto' => $calc['escalado']['aporte_contribucion'],
+                    'porcentaje' => (float) round(($calc['escalado']['aporte_contribucion'] / $totalIngresos) * 100, 2)
+                ],
+                [
+                    'nombre' => 'Permisos de Circulación',
+                    'monto' => $calc['escalado']['aporte_circulacion'],
+                    'porcentaje' => (float) round(($calc['escalado']['aporte_circulacion'] / $totalIngresos) * 100, 2)
+                ],
+                [
+                    'nombre' => 'Derechos de Aseo',
+                    'monto' => $calc['escalado']['aporte_aseo'],
+                    'porcentaje' => (float) round(($calc['escalado']['aporte_aseo'] / $totalIngresos) * 100, 2)
+                ],
+                [
+                    'nombre' => 'Fondo Común Municipal',
+                    'monto' => $calc['ingresos']['fcm'],
+                    'porcentaje' => 45.00
+                ],
+                [
+                    'nombre' => 'Patentes Municipales',
+                    'monto' => $calc['ingresos']['patentes'],
+                    'porcentaje' => 15.00
+                ],
+                [
+                    'nombre' => 'Otros Ingresos',
+                    'monto' => $calc['ingresos']['otros'],
+                    'porcentaje' => 10.00
+                ]
+            ];
+
+            // 3. Obtener Destino por Área y sus Sub-ítems (Escalados proporcionalmente)
             $areas = DB::table('gasto_areas')->get();
             $destinoPorArea = [];
             foreach ($areas as $area) {
+                // Calcular asignado en base al porcentaje de ponderación predefinido del área
+                $montoAsignadoArea = round($totalGastos * ($area->porcentaje / 100));
+
                 $subItems = DB::table('gasto_subitems')
                     ->where('area_id', $area->id)
                     ->select('nombre', 'monto')
                     ->get();
 
+                // Sumatoria de montos base de subitems para escalado proporcional cascada
+                $subItemsTotalBase = $subItems->sum('monto');
+                $scaledSubItems = [];
+
+                foreach ($subItems as $sub) {
+                    $scaledMonto = $subItemsTotalBase > 0 
+                        ? (int) round($sub->monto * ($montoAsignadoArea / $subItemsTotalBase)) 
+                        : 0;
+                    $scaledSubItems[] = [
+                        'nombre' => $sub->nombre,
+                        'monto' => $scaledMonto
+                    ];
+                }
+
                 $destinoPorArea[] = [
                     'area' => $area->area,
                     'icono' => $area->icono,
                     'color' => $area->color,
-                    'montoAsignado' => (int) $area->monto_asignado,
+                    'montoAsignado' => (int) $montoAsignadoArea,
                     'porcentaje' => (float) $area->porcentaje,
                     'descripcion' => $area->descripcion,
-                    'subItems' => $subItems->toArray()
+                    'subItems' => $scaledSubItems
                 ];
             }
 
-            // 4. Obtener Proyecciones Financieras
+            // 4. Obtener Proyecciones Financieras (Escaladas de acuerdo al nuevo presupuesto de gastos)
             $proyeccionesRaw = DB::table('proyecciones_areas')->get();
             $proyeccionPorArea = [];
             $anioProyectado = 2026;
             foreach ($proyeccionesRaw as $p) {
                 $anioProyectado = $p->anio;
+                // Escalar proyecciones en base al porcentaje y tasa de variación esperada
+                // Para mantener coherencia, calculamos la proyeccion basándonos en el asignado actual del área
+                $areaObj = $areas->firstWhere('area', $p->area);
+                $asigActual = $areaObj ? round($totalGastos * ($areaObj->porcentaje / 100)) : 1000000000;
+                $montoProy = round($asigActual * (1 + $p->variacion / 100));
+
                 $proyeccionPorArea[] = [
                     'area' => $p->area,
-                    'montoProyectado' => (int) $p->monto_proyectado,
+                    'montoProyectado' => (int) $montoProy,
                     'variacion' => (float) $p->variacion
                 ];
             }
@@ -82,8 +139,8 @@ class ApiController extends Controller
             }
 
             $userResponse = [
-                'nombre' => $contribuyente ? $contribuyente->nombre_encriptado : 'Usuario Simulado',
-                'rut' => $contribuyente ? $contribuyente->rut_encriptado : '12.345.678-9',
+                'nombre' => $contribuyente ? $this->deserializarSiEsNecesario($contribuyente->nombre_encriptado) : 'Usuario Simulado',
+                'rut' => $contribuyente ? $this->deserializarSiEsNecesario($contribuyente->rut_encriptado) : '12.345.678-9',
                 'recaudacionTotalUsuario' => $contribuyente ? ($contribuyente->aporte_contribucion + $contribuyente->aporte_circulacion + $contribuyente->aporte_aseo) : 728000,
                 'detalles' => [
                     'contribucion' => $contribuyente ? (int) $contribuyente->aporte_contribucion : 485000,
@@ -98,19 +155,19 @@ class ApiController extends Controller
                     'ultimaActualizacion' => $metadata->ultima_actualizacion,
                     'fuente' => $metadata->fuente,
                     'periodoInformado' => $metadata->periodo_informado,
-                    'recaudacionTotal' => (int) $metadata->recaudacion_total,
-                    'gastoTotal' => (int) $metadata->gasto_total,
+                    'recaudacionTotal' => (int) $totalIngresos,
+                    'gastoTotal' => (int) $totalGastos,
                     'poblacionComuna' => (int) $metadata->poblacion_comuna
                 ],
                 'resumenRecaudacion' => [
-                    'total' => (int) $metadata->recaudacion_total,
+                    'total' => (int) $totalIngresos,
                     'items' => $recaudacionItems
                 ],
                 'destinoPorArea' => $destinoPorArea,
                 'proyeccionesFinancieras' => [
                     'anioProyectado' => $anioProyectado,
-                    'ingresoProyectado' => 13500000000,
-                    'gastoProyectado' => 12800000000,
+                    'ingresoProyectado' => (int) round($totalIngresos * 1.05), // +5% proyeccion realista
+                    'gastoProyectado' => (int) round($totalGastos * 1.05),
                     'proyeccionPorArea' => $proyeccionPorArea
                 ],
                 'contribuyenteInfo' => $userResponse
@@ -149,9 +206,10 @@ class ApiController extends Controller
     public function getPresupuesto(Request $request)
     {
         try {
-            $areas = DB::table('gasto_areas')
-                ->select('area', 'monto_asignado as asignado')
-                ->get();
+            $calc = $this->calcularPresupuestoDinamico(2000);
+            $totalGastos = $calc['gastos']['total'];
+
+            $areas = DB::table('gasto_areas')->get();
 
             if ($areas->isEmpty()) {
                 throw new \Exception("Tabla gasto_areas vacía.");
@@ -173,10 +231,14 @@ class ApiController extends Controller
             $items = [];
             foreach ($areas as $a) {
                 $pct = $pctEjecMap[$a->area] ?? 90.0;
-                $ejecutado = round($a->asignado * ($pct / 100));
+                
+                // Calcular el asignado en base al porcentaje de ponderación predefinido de cada área
+                $asignado = round($totalGastos * ($a->porcentaje / 100));
+                $ejecutado = round($asignado * ($pct / 100));
+                
                 $items[] = [
                     'area' => $a->area,
-                    'asignado' => (int) $a->asignado,
+                    'asignado' => (int) $asignado,
                     'ejecutado' => (int) $ejecutado,
                     'pctEjec' => $pct
                 ];
@@ -225,7 +287,17 @@ class ApiController extends Controller
                 });
             }
 
-            return response()->json($query->get());
+            $proyectos = $query->get();
+            $calc = $this->calcularPresupuestoDinamico(2000);
+            $newGastoTotal = $calc['gastos']['total'];
+            $scaleRatio = $newGastoTotal / 11920000000;
+
+            foreach ($proyectos as $p) {
+                $p->monto = (int) round($p->monto * $scaleRatio);
+                $p->porcentaje = (float) round(($p->monto / $newGastoTotal) * 100, 2);
+            }
+
+            return response()->json($proyectos);
 
         } catch (\Exception $e) {
             Log::warning("ApiController::getProyectos - Fallback a datos duros: " . $e->getMessage());
@@ -262,7 +334,17 @@ class ApiController extends Controller
                       ->orWhere('proveedor', 'like', '%' . $search . '%');
             }
 
-            return response()->json($query->get());
+            $servicios = $query->get();
+            $calc = $this->calcularPresupuestoDinamico(2000);
+            $newGastoTotal = $calc['gastos']['total'];
+            $scaleRatio = $newGastoTotal / 11920000000;
+
+            foreach ($servicios as $s) {
+                $s->monto = (int) round($s->monto * $scaleRatio);
+                $s->porcentaje = (float) round(($s->monto / $newGastoTotal) * 100, 2);
+            }
+
+            return response()->json($servicios);
 
         } catch (\Exception $e) {
             Log::warning("ApiController::getServicios - Fallback a datos duros: " . $e->getMessage());
@@ -311,8 +393,8 @@ class ApiController extends Controller
                 'success' => true,
                 'token' => bin2hex(random_bytes(16)), // Generar un token de sesión seguro simulado
                 'user' => [
-                    'nombre' => $contribuyente->nombre_encriptado,
-                    'rut' => $contribuyente->rut_encriptado,
+                    'nombre' => $this->deserializarSiEsNecesario($contribuyente->nombre_encriptado),
+                    'rut' => $this->deserializarSiEsNecesario($contribuyente->rut_encriptado),
                     'rol' => $contribuyente->rol,
                     'recaudacionTotalUsuario' => ($contribuyente->aporte_contribucion + $contribuyente->aporte_circulacion + $contribuyente->aporte_aseo),
                     'detalles' => [
@@ -874,24 +956,122 @@ class ApiController extends Controller
     }
 
     /**
+     * Calcula dinámicamente el presupuesto municipal (ingresos y gastos)
+     * basándose en las contribuciones reales de los vecinos escaladas.
+     *
+     * @param int $factorEscala
+     * @return array
+     */
+    public function calcularPresupuestoDinamico($factorEscala = 2000)
+    {
+        // 1. Obtener la sumatoria de aportes de vecinos reales
+        $sumContribReal = (int) DB::table('contribuyentes')->where('rol', 'ciudadano')->sum('aporte_contribucion');
+        $sumCircReal = (int) DB::table('contribuyentes')->where('rol', 'ciudadano')->sum('aporte_circulacion');
+        $sumAseoReal = (int) DB::table('contribuyentes')->where('rol', 'ciudadano')->sum('aporte_aseo');
+        $totalVecinosReal = $sumContribReal + $sumCircReal + $sumAseoReal;
+        $cantidadContribuyentes = (int) DB::table('contribuyentes')->where('rol', 'ciudadano')->count();
+
+        // Si la base de datos está vacía, usamos valores semillas realistas de respaldo
+        if ($totalVecinosReal === 0) {
+            $sumContribReal = 485000 + 3500000;
+            $sumCircReal = 165000 + 1200000;
+            $sumAseoReal = 78000 + 300000;
+            $totalVecinosReal = $sumContribReal + $sumCircReal + $sumAseoReal;
+            $cantidadContribuyentes = 2;
+        }
+
+        // 2. Escalado Inicial Realista (Llevar a orden de magnitud de miles de millones)
+        $aporteContribucionTotal = $sumContribReal * $factorEscala;
+        $aporteCirculacionTotal = $sumCircReal * $factorEscala;
+        $aporteAseoTotal = $sumAseoReal * $factorEscala;
+        $totalVecinosEscalado = $totalVecinosReal * $factorEscala;
+
+        // 3. Proporción de Ingresos Definida (Cálculo Inverso):
+        // El aporte escalado de vecinos ($totalVecinosEscalado) representa exactamente el 30% del Presupuesto Total ($T)
+        // T = V_escalado / 0.30
+        $presupuestoTotalIngresos = (int) round($totalVecinosEscalado / 0.30);
+
+        // El 70% restante se desglosa visualmente en rubros realistas:
+        // Fondo Común Municipal (FCM): 45% del Presupuesto Total (T * 0.45)
+        $fcmTotal = (int) round($presupuestoTotalIngresos * 0.45);
+        // Patentes Comerciales e Industriales: 15% del Presupuesto Total (T * 0.15)
+        $patentesTotal = (int) round($presupuestoTotalIngresos * 0.15);
+        // Derechos de Concesión y Otros Ingresos: 10% del Presupuesto Total (T * 0.10)
+        $otrosIngresosTotal = (int) round($presupuestoTotalIngresos * 0.10);
+
+        // Ajuste fino para asegurar que la suma de ingresos sume exactamente el Presupuesto Total de Ingresos (debido a redondeos)
+        $sumaIngresosCalculados = $totalVecinosEscalado + $fcmTotal + $patentesTotal + $otrosIngresosTotal;
+        $diferenciaIngresos = $presupuestoTotalIngresos - $sumaIngresosCalculados;
+        if ($diferenciaIngresos !== 0) {
+            $fcmTotal += $diferenciaIngresos; // Absorber pequeñas diferencias de redondeo en el FCM
+        }
+
+        // 4. Coherencia Ingresos-Gastos (Presupuesto de Gastos Dinámico):
+        // El total de gastos representa exactamente el 92% de los ingresos (dejando 8% de superávit)
+        $presupuestoTotalGastos = (int) round($presupuestoTotalIngresos * 0.92);
+        $superavit = $presupuestoTotalIngresos - $presupuestoTotalGastos;
+
+        return [
+            'real' => [
+                'aporte_contribucion' => $sumContribReal,
+                'aporte_circulacion' => $sumCircReal,
+                'aporte_aseo' => $sumAseoReal,
+                'total_vecinos' => $totalVecinosReal,
+            ],
+            'escalado' => [
+                'aporte_contribucion' => $aporteContribucionTotal,
+                'aporte_circulacion' => $aporteCirculacionTotal,
+                'aporte_aseo' => $aporteAseoTotal,
+                'total_vecinos' => $totalVecinosEscalado,
+            ],
+            'ingresos' => [
+                'total' => $presupuestoTotalIngresos,
+                'fcm' => $fcmTotal,
+                'patentes' => $patentesTotal,
+                'otros' => $otrosIngresosTotal,
+            ],
+            'gastos' => [
+                'total' => $presupuestoTotalGastos,
+                'superavit' => $superavit,
+            ],
+            'cantidad_contribuyentes' => $cantidadContribuyentes,
+            'factor_escala' => $factorEscala,
+        ];
+    }
+
+    /**
      * Obtener resumen de contribuciones totales de todos los vecinos.
      * Usado por el frontend para mostrar el total de contribuciones en el presupuesto municipal.
      */
     public function getResumenContribuyentes()
     {
         try {
-            $sumContrib = DB::table('contribuyentes')->where('rol', 'ciudadano')->sum('aporte_contribucion');
-            $sumCirc    = DB::table('contribuyentes')->where('rol', 'ciudadano')->sum('aporte_circulacion');
-            $sumAseo    = DB::table('contribuyentes')->where('rol', 'ciudadano')->sum('aporte_aseo');
-            $totalVecinos = $sumContrib + $sumCirc + $sumAseo;
-            $cantidadContribuyentes = DB::table('contribuyentes')->where('rol', 'ciudadano')->count();
+            $calc = $this->calcularPresupuestoDinamico(2000);
 
             return response()->json([
-                'aporte_contribucion_total' => (int) $sumContrib,
-                'aporte_circulacion_total'  => (int) $sumCirc,
-                'aporte_aseo_total'         => (int) $sumAseo,
-                'total_vecinos'             => (int) $totalVecinos,
-                'cantidad_contribuyentes'   => $cantidadContribuyentes,
+                // Valores reales
+                'aporte_contribucion_real' => $calc['real']['aporte_contribucion'],
+                'aporte_circulacion_real'  => $calc['real']['aporte_circulacion'],
+                'aporte_aseo_real'         => $calc['real']['aporte_aseo'],
+                'total_vecinos_real'       => $calc['real']['total_vecinos'],
+
+                // Configuración y factores
+                'factor_escala'            => $calc['factor_escala'],
+
+                // Valores escalados (requeridos para retrocompatibilidad con frontend o UI)
+                'aporte_contribucion_total' => $calc['escalado']['aporte_contribucion'],
+                'aporte_circulacion_total'  => $calc['escalado']['aporte_circulacion'],
+                'aporte_aseo_total'         => $calc['escalado']['aporte_aseo'],
+                'total_vecinos'             => $calc['escalado']['total_vecinos'],
+                'cantidad_contribuyentes'   => $calc['cantidad_contribuyentes'],
+
+                // Cálculos adicionales del presupuesto para transparencia y consistencia
+                'presupuesto_total_ingresos' => $calc['ingresos']['total'],
+                'fcm_total'                 => $calc['ingresos']['fcm'],
+                'patentes_total'            => $calc['ingresos']['patentes'],
+                'otros_ingresos_total'      => $calc['ingresos']['otros'],
+                'presupuesto_total_gastos'  => $calc['gastos']['total'],
+                'superavit'                 => $calc['gastos']['superavit'],
             ]);
         } catch (\Exception $e) {
             Log::warning("getResumenContribuyentes - Error: " . $e->getMessage());
@@ -903,6 +1083,24 @@ class ApiController extends Controller
                 'cantidad_contribuyentes'   => 0,
             ]);
         }
+    }
+
+    /**
+     * Limpia un valor desencriptado de posibles doble serializaciones.
+     */
+    private function deserializarSiEsNecesario($valor)
+    {
+        if (is_string($valor) && (strpos($valor, 's:') === 0 || strpos($valor, 'a:') === 0)) {
+            try {
+                $unserialized = @unserialize($valor);
+                if ($unserialized !== false) {
+                    return $unserialized;
+                }
+            } catch (\Exception $e) {
+                // Continuar
+            }
+        }
+        return $valor;
     }
 }
 
