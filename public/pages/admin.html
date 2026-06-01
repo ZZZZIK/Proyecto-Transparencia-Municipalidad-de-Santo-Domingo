@@ -556,10 +556,16 @@
       const tipo = document.getElementById('uploadTipo').value;
       if (!tipo) return;
 
-      const a = document.createElement('a');
-      a.href = `../data/plantillas/plantilla_${tipo}.csv`;
-      a.download = `plantilla_${tipo}.csv`;
-      a.click();
+      const baseApi = App.getBaseApiUrl();
+      if (baseApi) {
+        // Usar la ruta del backend dinámica que garantiza consistencia de esquema
+        window.location.href = `${baseApi}/admin/plantilla/${tipo}`;
+      } else {
+        const a = document.createElement('a');
+        a.href = `../data/plantillas/plantilla_${tipo}.csv`;
+        a.download = `plantilla_${tipo}.csv`;
+        a.click();
+      }
       logAction(`Plantilla CSV descargada para <strong>${escapeHTML(tipoLabels[tipo])}</strong>.`);
     }
 
@@ -875,98 +881,11 @@
       } catch (e) {
         console.error('Error en carga:', e);
         progress.classList.remove('active');
-
-        if (e.message === 'OfflineMode') {
-          // Modo offline: simular carga exitosa guardando en localStorage
-          localStorage.setItem('transparencia_carga_' + tipo, JSON.stringify(parsedRows));
-
-          // Registrar historial offline
-          const offlineHistory = JSON.parse(localStorage.getItem('transparencia_historial_offline') || '[]');
-          offlineHistory.unshift({
-            created_at: new Date().toISOString().split('T')[0],
-            tipo_carga: tipo,
-            nombre_archivo: currentFile ? currentFile.name : 'archivo.csv',
-            registros_procesados: parsedRows.length,
-            registros_insertados: parsedRows.length,
-            estado: 'offline'
-          });
-          localStorage.setItem('transparencia_historial_offline', JSON.stringify(offlineHistory));
-
-          // === Propagación en cascada para contribuyentes con coherencia matemática total (modo offline) ===
-          if (tipo === 'contribuyentes') {
-            let sumContrib = 0, sumCirc = 0, sumAseo = 0;
-            parsedRows.forEach(c => {
-              sumContrib += parseInt(String(c.aporte_contribucion).replace(/[^\d-]/g, '')) || 0;
-              sumCirc += parseInt(String(c.aporte_circulacion).replace(/[^\d-]/g, '')) || 0;
-              sumAseo += parseInt(String(c.aporte_aseo).replace(/[^\d-]/g, '')) || 0;
-            });
-
-            // Coherencia matemática estricta: escala de factor 2000 (igual que backend calcularPresupuestoDinamico)
-            const totalVecinosReal = sumContrib + sumCirc + sumAseo;
-            const totalVecinosEscalado = totalVecinosReal * 2000;
-            
-            // T = VecinosEscalados / 0.30
-            const recaudacionTotalDinamica = Math.round(totalVecinosEscalado / 0.30);
-            // Gasto = 92% de los ingresos
-            const gastoTotalDinamico = Math.round(recaudacionTotalDinamica * 0.92);
-
-            // Desglose de ingresos según proporciones de la municipalidad (coherencia matemática)
-            const fcmTotal = Math.round(recaudacionTotalDinamica * 0.45);
-            const patentesTotal = Math.round(recaudacionTotalDinamica * 0.15);
-            const otrosTotal = Math.round(recaudacionTotalDinamica * 0.10);
-
-            // Armar items de recaudación con sus respectivos porcentajes correctos
-            const recItems = [
-              { nombre: 'Impuesto Territorial (Vecinos)', monto: sumContrib * 2000, porcentaje: parseFloat(((sumContrib * 2000) / recaudacionTotalDinamica * 100).toFixed(2)) },
-              { nombre: 'Permisos de Circulación (Vecinos)', monto: sumCirc * 2000, porcentaje: parseFloat(((sumCirc * 2000) / recaudacionTotalDinamica * 100).toFixed(2)) },
-              { nombre: 'Derechos de Aseo (Vecinos)', monto: sumAseo * 2000, porcentaje: parseFloat(((sumAseo * 2000) / recaudacionTotalDinamica * 100).toFixed(2)) },
-              { nombre: 'Fondo Común Municipal (FCM)', monto: fcmTotal, porcentaje: 45.00 },
-              { nombre: 'Patentes Comerciales e Industriales', monto: patentesTotal, porcentaje: 15.00 },
-              { nombre: 'Derechos de Concesión y Otros Ingresos', monto: otrosTotal, porcentaje: 10.00 }
-            ];
-
-            // Guardar recaudación actualizada
-            localStorage.setItem('transparencia_carga_recaudacion', JSON.stringify(recItems));
-
-            // Actualizar metadata con el nuevo total y el gasto total dinámico
-            let metaArr = [];
-            try {
-              const storedMeta = localStorage.getItem('transparencia_carga_metadata');
-              if (storedMeta) metaArr = JSON.parse(storedMeta);
-            } catch(e) {}
-            if (metaArr.length > 0) {
-              metaArr[0].recaudacion_total = recaudacionTotalDinamica;
-              metaArr[0].gasto_total = gastoTotalDinamico;
-            } else {
-              metaArr = [{ 
-                ultima_actualizacion: new Date().toISOString().split('T')[0], 
-                fuente: 'Dirección de Control y Finanzas', 
-                periodo_informado: 'Año Fiscal ' + (new Date().getFullYear() - 1), 
-                recaudacion_total: recaudacionTotalDinamica, 
-                gasto_total: gastoTotalDinamico, 
-                poblacion_comuna: 9800 
-              }];
-            }
-            localStorage.setItem('transparencia_carga_metadata', JSON.stringify(metaArr));
-
-            logAction(`<span style="color:#22c55e">Propagación en cascada completada: recaudación actualizada a ${escapeHTML(App.formatCLP(recaudacionTotalDinamica))} con ${parsedRows.length} contribuyentes.</span>`);
-          }
-
-          showResult('success', {
-            mensaje: 'Datos guardados localmente (modo offline). Se sincronizarán cuando el servidor esté disponible.',
-            resumen: {
-              tipo: tipo,
-              archivo: currentFile ? currentFile.name : 'archivo.csv',
-              registros_procesados: parsedRows.length,
-              registros_insertados: parsedRows.length,
-              registros_actualizados: 0
-            }
-          });
-          logAction(`<span style="color:#f59e0b">Carga guardada en modo offline (${parsedRows.length} registros). Pendiente sincronización con MySQL.</span>`);
-        } else {
-          showResult('error', { error: e.message });
-          logAction(`<span style="color:#ef4444">✗ Error en carga: ${escapeHTML(e.message)}</span>`);
-        }
+        const errorMsg = e.message === 'OfflineMode' 
+          ? 'El servidor de base de datos no está disponible. Asegúrese de iniciar MySQL y el backend Laravel.' 
+          : e.message;
+        showResult('error', { error: 'Error al procesar la carga', detalle: errorMsg });
+        logAction(`<span style="color:#ef4444">✗ Falló la carga de <strong>${escapeHTML(tipoLabels[tipo])}</strong>: ${escapeHTML(errorMsg)}</span>`);
       }
 
       btnConfirm.disabled = false;
@@ -1014,31 +933,21 @@
         if (!response.ok) throw new Error('ServerError');
         cargasAPI = await response.json();
       } catch (e) {
-        console.warn('No se pudo cargar historial desde API (probablemente Offline):', e);
+        console.error('Error al cargar historial desde la API del backend:', e);
+        container.innerHTML = '<p class="text-danger text-center py-3" style="font-size:0.85rem">Error de conexión: No se pudo cargar el historial del servidor.</p>';
+        return;
       }
 
-      // Obtener historial offline guardado
-      const offlineHistory = JSON.parse(localStorage.getItem('transparencia_historial_offline') || '[]');
-
-      // Combinar y ordenar
-      let todasLasCargas = [...offlineHistory, ...(Array.isArray(cargasAPI) ? cargasAPI : [])];
-
-      // Ordenar por fecha desc (las offline ya tienen fecha actual)
-      todasLasCargas.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-      if (todasLasCargas.length === 0) {
+      if (!cargasAPI || cargasAPI.length === 0) {
         container.innerHTML = '<p class="text-muted text-center py-3" style="font-size:0.85rem">No se han realizado cargas de datos aún.</p>';
         return;
       }
 
-      renderUploadHistory(container, todasLasCargas);
+      renderUploadHistory(container, cargasAPI);
     }
 
     // Renderizar tabla de historial (Mitigación XSS)
     function renderUploadHistory(container, cargas) {
-      // Guardar en localStorage como backup
-      localStorage.setItem('transparencia_cargas_history', JSON.stringify(cargas));
-
       let html = `
         <table>
           <thead>
@@ -1092,38 +1001,15 @@
           throw new Error("EmptyDB");
         }
 
-        localStorage.setItem('transparencia_periodos', JSON.stringify(allPeriods));
         logAction("Datos de períodos cargados exitosamente en tiempo real desde MySQL.");
       } catch (e) {
-        console.warn("Utilizando almacenamiento local de respaldo:", e);
-
-        const local = localStorage.getItem('transparencia_periodos');
-        if (local) {
-          allPeriods = JSON.parse(local);
-          logAction("Datos cargados localmente desde localStorage (Respaldo Offline).");
-        } else {
-          allPeriods = [];
-          
-          // Eliminación de años estrictos: rango dinámico hasta el año actual + 1
-          const currentYear = new Date().getFullYear();
-          const years = [];
-          for (let y = 2023; y <= currentYear + 1; y++) {
-            years.push(y);
-          }
-          
-          years.forEach(y => {
-            Object.keys(monthNames).forEach(m => {
-              allPeriods.push({
-                anio: y,
-                mes: m,
-                nombre_mes: monthNames[m],
-                habilitado: y === (currentYear + 1) ? 0 : 1
-              });
-            });
-          });
-          localStorage.setItem('transparencia_periodos', JSON.stringify(allPeriods));
-          logAction("Sincronización inicial de períodos creada de forma segura.");
-        }
+        console.error("Error al cargar períodos desde la base de datos:", e);
+        container.innerHTML = `
+          <div class="alert alert-danger" role="alert">
+            <span class="material-icons mr-2" style="vertical-align:middle">cloud_off</span>
+            Error de conexión: No se pudieron cargar los períodos de consulta del servidor.
+          </div>`;
+        return;
       }
 
       renderPeriods();
@@ -1196,7 +1082,6 @@
       if (idx !== -1) {
         allPeriods[idx].habilitado = val;
       }
-      localStorage.setItem('transparencia_periodos', JSON.stringify(allPeriods));
 
       const labelMes = monthNames[mes];
       logAction(`Período <strong>${escapeHTML(labelMes)} ${escapeHTML(anio)}</strong> modificado a <strong>${isChecked ? 'HABILITADO' : 'DESHABILITADO'}</strong>.`);
@@ -1231,8 +1116,8 @@
         console.log("MySQL Sincronizado:", res.mensaje);
         logAction(`Sincronización exitosa con la base de datos MySQL (Año ${escapeHTML(anio)}, Mes ${escapeHTML(mes)}).`);
       } catch (e) {
-        console.warn("No se pudo sincronizar en el servidor real. Estado guardado en LocalStorage.", e);
-        logAction(`<span style="color:#f59e0b">Advertencia: Sincronizado solo en LocalStorage (Servidor offline/Live Server).</span>`);
+        console.error("Error al sincronizar con el servidor:", e);
+        logAction(`<span style="color:#ef4444">Error: No se pudo guardar la modificación del período en el servidor.</span>`);
       }
 
       updateYearBadges(anio);
@@ -1286,8 +1171,6 @@
         }
       }
 
-      localStorage.setItem('transparencia_periodos', JSON.stringify(allPeriods));
-
       if (promises.length > 0) {
         try {
           const results = await Promise.all(promises);
@@ -1301,7 +1184,7 @@
           logAction(`<span style="color:#ef4444">Error crítico en sincronización concurrente del año: ${escapeHTML(err.message)}</span>`);
         }
       } else {
-        logAction(`<span style="color:#f59e0b">Año completo ${escapeHTML(anio)} actualizado en LocalStorage (Modo offline).</span>`);
+        logAction(`<span style="color:#ef4444">Error: No se detectaron períodos para sincronizar con el servidor.</span>`);
       }
 
       updateYearBadges(anio);

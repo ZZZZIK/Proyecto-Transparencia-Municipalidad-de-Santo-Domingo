@@ -276,7 +276,6 @@
   </footer>
 
   <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-  <script src="../js/budget-engine.js"></script>
   <script src="../js/app.js"></script>
   <script>
     // Función de validación de RUN chileno (Algoritmo Módulo 11) - ISO 27001/27701 Security Control
@@ -442,59 +441,13 @@
             throw new Error("ServerError");
           }
         } catch (error) {
-          // Si es un error de credenciales reales (401), lo mostramos y no simulamos
-          // EXCEPTO si ingresó exactamente las credenciales de prueba
-          if (!isMockUser && error.message && error.message !== "LocalFileProtocol" && error.message !== "ServerError" && !error.message.includes("fetch") && !error.message.includes("JSON")) {
-            showError(error.message);
-            return;
-          }
-
-          // Si el servidor no está disponible y no es un usuario mock, mostrar error de red consistente
-          if (!isMockUser) {
-            showError('Error de conexión con el servidor. Por favor, intente más tarde o consulte con el administrador.');
-            return;
-          }
-
-          console.warn("Iniciando simulación local segura (Graceful Fallback)...");
-          
-          if (cleanRut === '123456789' && password === 'Pb_123@01') {
-            // Usuario A: Alonso — datos desde BudgetEngine
-            const uData = BudgetEngine.buildContribuyenteSession('123456789', {
-              nombre: 'Alonso Alexander Maurel Murgas', rut: '12.345.678-9',
-              contrib: 485000, circ: 165000, aseo: 78000,
-              mensual: [58000,58000,62000,60000,65000,60000,62000,63000,58000,62000,60000,60000]
-            });
-            sessionData = {
-              token: 'offline_token_a_12345',
-              user: { ...uData, rol: 'ciudadano' }
-            };
-          } else if (cleanRut === '892342554' && password === 'Pb_321@02') {
-            // Usuario B: Sofía — datos desde BudgetEngine
-            const uData = BudgetEngine.buildContribuyenteSession('892342554', {
-              nombre: 'Sofía Elizabeth Álvarez Pérez', rut: '89.234.255-4',
-              contrib: 3500000, circ: 1200000, aseo: 300000,
-              mensual: [400000,420000,410000,430000,420000,410000,420000,430000,410000,420000,410000,420000]
-            });
-            sessionData = {
-              token: 'offline_token_b_67890',
-              user: { ...uData, rol: 'ciudadano' }
-            };
-          } else if (cleanRut === '87654321' && password === 'Pb_123@03') {
-            sessionData = {
-              token: 'offline_token_admin_9999',
-              user: {
-                nombre: 'Administrador Municipal',
-                rut: '8.765.432-1',
-                rol: 'admin',
-                recaudacionTotalUsuario: 0,
-                detalles: { contribucion: 0, circulacion: 0, aseo: 0 },
-                mensual: []
-              }
-            };
+          console.error("Error durante el inicio de sesión:", error);
+          if (error.message === "TypeError: Failed to fetch" || error.message.includes("fetch")) {
+            showError('Error de conexión con el servidor. Por favor, asegúrese de iniciar MySQL (XAMPP) y el backend Laravel.');
           } else {
-            showError('RUT o contraseña incorrectos.');
-            return;
+            showError(error.message || 'Error de conexión con el servidor. Intente más tarde.');
           }
+          return;
         }
 
         // Si tenemos datos de sesión válidos (ya sea de API o simulación local)

@@ -387,7 +387,6 @@
   <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.digital.gob.cl/framework/js/gob.cl.js"></script>
-  <script src="../js/budget-engine.js"></script>
   <script src="../js/app.js"></script>
   <script src="../js/tables.js"></script>
   <script>
@@ -403,11 +402,16 @@
       const activeUser = session.user;
 
       // Obtener períodos de consulta habilitados
-      const allPeriods = await App.getPeriodosHabilitados();
+      let allPeriods = [];
+      try {
+        allPeriods = await App.getPeriodosHabilitados();
+      } catch (err) {
+        console.error("Error al cargar períodos:", err);
+      }
 
       // Poblar dinámicamente el selector de años desde los períodos disponibles para evitar magic numbers o años fijos
       const selectAnio = document.getElementById('filterAnio');
-      if (selectAnio) {
+      if (selectAnio && allPeriods.length > 0) {
         const uniqueYears = [...new Set(allPeriods.map(p => String(p.anio)))].sort((a, b) => b - a);
         const savedYear = selectAnio.value || '2025';
         selectAnio.innerHTML = '';
@@ -423,155 +427,61 @@
         }
       }
 
-      const data = await App.loadJSON('../data/destino-impuestos.json');
-      if (!data) return;
+      // Cargar datos reales y escalados de la API de Laravel (conectada a MySQL)
+      let data = null;
+      try {
+        data = await App.loadJSON('../data/destino-impuestos.json?rut=' + encodeURIComponent(activeUser.rut));
+      } catch (err) {
+        console.error("Error de conexión a la API de Laravel:", err);
+        document.body.innerHTML = `
+          <div class="container text-center py-5">
+            <span class="material-icons text-danger" style="font-size:4rem">cloud_off</span>
+            <h2 class="mt-3">Error de Conexión</h2>
+            <p class="text-muted">No se pudo establecer conexión con el servidor de base de datos. Por favor, asegúrese de iniciar XAMPP y levantar Laravel.</p>
+            <a href="../index.html" class="btn btn-primary mt-3">Volver al Inicio</a>
+          </div>`;
+        return;
+      }
 
-      // Inyectar datos del ciudadano activo logueado en la estructura del dashboard
-      data.contribuyenteInfo = activeUser;
+      if (!data) return;
 
       const colors = ['#2E86AB', '#E8433E', '#F77F00', '#52B788', '#7209B7', '#1B4332', '#E09F3E', '#6C757D'];
       const fmt = v => '$' + new Intl.NumberFormat('es-CL').format(v);
       const multipliers = { '2026': 1.05, '2025': 1, '2024': 0.93, '2023': 0.86 };
 
-      // Cargar metadatos generales (BudgetEngine centralizado)
-      let metadataObj = data.metadata;
-      const offlineMeta = BudgetEngine.getMetadata();
-      if (offlineMeta) {
-        metadataObj.poblacionComuna = BudgetEngine.cleanVal(offlineMeta.poblacion_comuna);
-        metadataObj.recaudacionTotal = BudgetEngine.cleanVal(offlineMeta.recaudacion_total);
-      }
-      // Evitar que un valor corrupto de la población arruine el cálculo por habitante
+      // Población de metadatos desde la base de datos
+      const metadataObj = data.metadata;
       const poblacion = (metadataObj.poblacionComuna && metadataObj.poblacionComuna > 100) ? metadataObj.poblacionComuna : 9800;
 
-      // Estructura de contribuciones del usuario simulado por año
-      const userData = {
-        '2026': { contrib: 0, circ: 0, aseo: 0, monthly: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-        '2025': { contrib: 485000, circ: 165000, aseo: 78000, monthly: [58000, 58000, 62000, 60000, 65000, 60000, 62000, 63000, 58000, 62000, 60000, 60000] },
-        '2024': { contrib: 460000, circ: 155000, aseo: 72000, monthly: [55000, 55000, 58000, 57000, 60000, 57000, 58000, 59000, 55000, 58000, 57000, 58000] },
-        '2023': { contrib: 430000, circ: 145000, aseo: 65000, monthly: [50000, 50000, 55000, 52000, 56000, 53000, 54000, 55000, 50000, 54000, 53000, 52000] }
-      };
+      // Inyectar nombre del usuario en la UI
+      document.getElementById('userName').textContent = data.contribuyenteInfo.nombre;
 
-      // Rellenar dinámicamente con los datos de sesión ClaveÚnica del contribuyente
-      if (data.contribuyenteInfo) {
-        document.getElementById('userName').textContent = data.contribuyenteInfo.nombre;
-        userData['2025'] = {
-          contrib: data.contribuyenteInfo.detalles.contribucion,
-          circ: data.contribuyenteInfo.detalles.circulacion,
-          aseo: data.contribuyenteInfo.detalles.aseo,
-          monthly: data.contribuyenteInfo.mensual
-        };
-
-        // Escalar proporcionalmente los otros años
-        userData['2026'] = {
-          contrib: Math.round(data.contribuyenteInfo.detalles.contribucion * 1.05),
-          circ: Math.round(data.contribuyenteInfo.detalles.circulacion * 1.05),
-          aseo: Math.round(data.contribuyenteInfo.detalles.aseo * 1.05),
-          monthly: data.contribuyenteInfo.mensual.map(m => Math.round(m * 1.05))
-        };
-        userData['2024'] = {
-          contrib: Math.round(data.contribuyenteInfo.detalles.contribucion * 0.93),
-          circ: Math.round(data.contribuyenteInfo.detalles.circulacion * 0.93),
-          aseo: Math.round(data.contribuyenteInfo.detalles.aseo * 0.93),
-          monthly: data.contribuyenteInfo.mensual.map(m => Math.round(m * 0.93))
-        };
-        userData['2023'] = {
-          contrib: Math.round(data.contribuyenteInfo.detalles.contribucion * 0.86),
-          circ: Math.round(data.contribuyenteInfo.detalles.circulacion * 0.86),
-          aseo: Math.round(data.contribuyenteInfo.detalles.aseo * 0.86),
-          monthly: data.contribuyenteInfo.mensual.map(m => Math.round(m * 0.86))
-        };
-      }
-
-      // === Cálculo centralizado con BudgetEngine ===
-      const calc = BudgetEngine.calcularPresupuestoDinamico(2000);
-      const recItems = BudgetEngine.getRecaudacionItems(calc);
-      const sumTotal = calc.ingresos.total;
-      const totalVecinos = calc.escalado.total_vecinos;
-      const totalFCM = calc.ingresos.fcm;
-      const totalOtros = calc.ingresos.patentes + calc.ingresos.otros;
-      data.metadata.recaudacionTotal = sumTotal;
+      const sumTotal = data.metadata.recaudacionTotal;
+      const recItems = data.resumenRecaudacion.items;
+      const totalVecinos = recItems.slice(0, 3).reduce((s, it) => s + it.monto, 0);
+      const totalFCM = recItems.find(it => it.nombre.includes('Fondo Común'))?.monto || 0;
+      const totalOtros = recItems.filter(it => !it.nombre.includes('Fondo Común') && !['Impuesto Territorial', 'Permisos de Circulación', 'Derechos de Aseo'].includes(it.nombre)).reduce((s, it) => s + it.monto, 0);
 
       const ptcVecinos = sumTotal > 0 ? ((totalVecinos / sumTotal) * 100).toFixed(1) : 0;
+      const baseGastoTotal = data.metadata.gastoTotal;
 
-      // Gastos coherentes con la regla del 92%
-      const baseGastoTotal = calc.gastos.total;
+      // Cargar Gastos / Destino por Área desde la respuesta de la base de datos
+      const areas = data.destinoPorArea;
 
-      // Cargar Gastos / Destino por Área
-      let areas = data.destinoPorArea;
-      const offlineGastos = BudgetEngine.getGastosAreas();
-      if (offlineGastos.length > 0) {
-        areas = offlineGastos.map(r => ({
-          area: r.area, icono: r.icono, color: r.color,
-          montoAsignado: BudgetEngine.cleanVal(r.monto_asignado), porcentaje: parseFloat(r.porcentaje),
-          descripcion: r.descripcion, subItems: []
-        }));
-      }
-
-      // Sanitizar areas
-      areas = areas.map(a => ({
-        area: a.area,
-        icono: a.icono,
-        color: a.color,
-        porcentaje: a.porcentaje,
-        descripcion: a.descripcion,
-        montoAsignado: a.montoAsignado || Math.round(baseGastoTotal * a.porcentaje / 100),
-        subItems: a.subItems || []
-      }));
-
-      // Cargar Proyectos (BudgetEngine centralizado)
+      // Cargar Proyectos desde la API
       let proyData = [];
-      const offlineProy = BudgetEngine.getProyectos();
-      if (offlineProy.length > 0) {
-        proyData = offlineProy.map(p => ({
-          id: p.codigo, nombre: p.nombre, area: p.area, monto: BudgetEngine.cleanVal(p.monto), porcentaje: parseFloat(p.porcentaje), estado: p.estado
-        }));
-      } else {
-        try {
-          const apiProy = await App.loadJSON('../data/proyectos.json');
-          if (apiProy && apiProy.length > 0) proyData = apiProy;
-          else throw new Error("No data");
-        } catch (e) {
-          proyData = [
-            { id: 'P-2025-001', nombre: 'Alumbrado Público Costanera', area: 'Seguridad', monto: 185000000, porcentaje: 1.55, estado: 'Completado' },
-            { id: 'P-2025-002', nombre: 'Multicancha Las Acacias', area: 'Deporte', monto: 320000000, porcentaje: 2.42, estado: 'En Ejecución' },
-            { id: 'P-2025-003', nombre: 'Pavimento Av. Principal', area: 'Obras', monto: 450000000, porcentaje: 3.78, estado: 'Completado' },
-            { id: 'P-2025-004', nombre: 'Ampliación CESFAM', area: 'Salud', monto: 680000000, porcentaje: 4.28, estado: 'En Ejecución' },
-            { id: 'P-2025-005', nombre: 'Televigilancia Centro', area: 'Seguridad', monto: 220000000, porcentaje: 1.85, estado: 'Completado' },
-            { id: 'P-2025-006', nombre: 'Restauración Escuela', area: 'Educación', monto: 280000000, porcentaje: 1.64, estado: 'En Ejecución' },
-            { id: 'P-2025-007', nombre: 'Reciclaje Comunal', area: 'Medio Ambiente', monto: 95000000, porcentaje: 0.80, estado: 'Completado' },
-            { id: 'P-2025-008', nombre: 'Centro Adulto Mayor', area: 'Comunitario', monto: 150000000, porcentaje: 1.01, estado: 'En Ejecución' },
-            { id: 'P-2025-009', nombre: 'Borde Costero', area: 'Obras', monto: 520000000, porcentaje: 3.06, estado: 'En Ejecución' },
-            { id: 'P-2025-010', nombre: 'Digitalización Municipal', area: 'Admin', monto: 75000000, porcentaje: 0.63, estado: 'Completado' }
-          ];
-        }
+      try {
+        proyData = await App.loadJSON('../data/proyectos.json');
+      } catch (e) {
+        console.error("Error al cargar proyectos:", e);
       }
 
-      // Cargar Servicios (BudgetEngine centralizado)
+      // Cargar Servicios desde la API
       let servData = [];
-      const offlineServ = BudgetEngine.getServicios();
-      if (offlineServ.length > 0) {
-        servData = offlineServ.map(s => ({
-          servicio: s.servicio, proveedor: s.proveedor, monto: BudgetEngine.cleanVal(s.monto), porcentaje: parseFloat(s.porcentaje)
-        }));
-      } else {
-        try {
-          const apiServ = await App.loadJSON('../data/servicios.json');
-          if (apiServ && apiServ.length > 0) servData = apiServ;
-          else throw new Error("No data");
-        } catch (e) {
-          servData = [
-            { servicio: 'Recolección de Residuos', proveedor: 'Servicios Ambientales SpA', monto: 321000000, porcentaje: 2.69 },
-            { servicio: 'Mantención Alumbrado', proveedor: 'Enel Distribución', monto: 180000000, porcentaje: 1.51 },
-            { servicio: 'Aseo de Calles', proveedor: 'Limpieza Comunal S.A.', monto: 215000000, porcentaje: 1.80 },
-            { servicio: 'Seguridad Ciudadana', proveedor: 'Seguridad y Protección Limitada', monto: 280000000, porcentaje: 2.35 },
-            { servicio: 'Mantenimiento de Áreas Verdes', proveedor: 'Paisajismo Verde SpA', monto: 150000000, porcentaje: 1.26 },
-            { servicio: 'Mantenimiento de Vehículos', proveedor: 'Talleres Mecánicos del Sur', monto: 95000000, porcentaje: 0.80 },
-            { servicio: 'Provisión de Insumos Médicos', proveedor: 'Distribuidora Médica Nacional', monto: 420000000, porcentaje: 3.52 },
-            { servicio: 'Transporte Escolar', proveedor: 'Transportes Escolares Unidos', monto: 110000000, porcentaje: 0.92 },
-            { servicio: 'Soporte Informático', proveedor: 'Tecnologías y Sistemas S.A.', monto: 65000000, porcentaje: 0.55 },
-            { servicio: 'Servicios de Impresión', proveedor: 'Imprenta Rápida SpA', monto: 45000000, porcentaje: 0.38 }
-          ];
-        }
+      try {
+        servData = await App.loadJSON('../data/servicios.json');
+      } catch (e) {
+        console.error("Error al cargar servicios:", e);
       }
 
       // Rellenar listas desplegables de filtros una sola vez
@@ -591,8 +501,8 @@
         filterProy.innerHTML = '<option value="__all__">Todos</option>';
         proyData.forEach(p => {
           const o = document.createElement('option');
-          o.value = p.nombre;
-          o.textContent = p.nombre;
+          o.value = p.nombre || p.nombre_proyecto;
+          o.textContent = p.nombre || p.nombre_proyecto;
           filterProy.appendChild(o);
         });
       }
@@ -696,9 +606,10 @@
         const mult = multipliers[anio] || 1;
         const divisor = mes === 'anual' ? 1 : 12;
 
-        const ud = userData[anio] || userData['2025'];
-        let userTotal = ud.contrib + ud.circ + ud.aseo;
-        if (mes !== 'anual') { userTotal = ud.monthly[parseInt(mes) - 1]; }
+        let userTotal = Math.round(data.contribuyenteInfo.recaudacionTotalUsuario * mult);
+        if (mes !== 'anual') {
+          userTotal = Math.round(data.contribuyenteInfo.mensual[parseInt(mes) - 1] * mult);
+        }
 
         const currentSumTotal = Math.round((sumTotal * mult) / divisor);
         const currentGastoTotal = Math.round((baseGastoTotal * mult) / divisor);
@@ -725,6 +636,21 @@
           area: a.area, icono: a.icono, color: a.color, porcentaje: a.porcentaje,
           montoUser: Math.round(userTotal * a.porcentaje / 100)
         }));
+
+        // Ajuste por redondeo utilizando el método del residuo mayor para garantizar consistencia matemática perfecta (100% de coincidencia al centavo)
+        const sumMontoUser = pcData.reduce((s, a) => s + a.montoUser, 0);
+        const diff = userTotal - sumMontoUser;
+        if (diff !== 0 && pcData.length > 0) {
+          let maxIndex = 0;
+          let maxVal = pcData[0].montoUser;
+          for (let i = 1; i < pcData.length; i++) {
+            if (pcData[i].montoUser > maxVal) {
+              maxVal = pcData[i].montoUser;
+              maxIndex = i;
+            }
+          }
+          pcData[maxIndex].montoUser += diff;
+        }
         document.getElementById('chartAportePerCapita').innerHTML = '';
         App.renderBarChart('chartAportePerCapita', pcData.map(a => ({ label: a.area, value: a.montoUser, color: a.color })));
         document.getElementById('cardsPerCapita').innerHTML = pcData.map(a => `
@@ -744,20 +670,15 @@
         const currentTotalFCM = Math.round(totalFCM * mult / divisor);
         const currentTotalOtros = Math.round(totalOtros * mult / divisor);
 
-        let currentOrigenData = [];
-        if (padron && padron.length > 0) {
-          currentOrigenData = [
-            { label: 'Aportes de Vecinos (Ingresos Propios)', percent: parseFloat(ptcVecinos), color: '#F77F00', monto: currentTotalVecinos },
-            { label: 'Fondo Común Municipal (FCM)', percent: 45.0, color: '#006FB3', monto: currentTotalFCM },
-            { label: 'Otras Transferencias / Ingresos', percent: 25.0, color: '#52B788', monto: currentTotalOtros }
-          ];
-        } else {
-          currentOrigenData = [
-            { label: 'Aportes de Vecinos (Ingresos Propios)', percent: parseFloat(currentSumTotal > 0 ? ((currentTotalVecinos / currentSumTotal) * 100).toFixed(1) : 0), color: '#F77F00', monto: currentTotalVecinos },
-            { label: 'Fondo Común Municipal (FCM)', percent: parseFloat(currentSumTotal > 0 ? ((currentTotalFCM / currentSumTotal) * 100).toFixed(1) : 0), color: '#006FB3', monto: currentTotalFCM },
-            { label: 'Otras Transferencias / Ingresos', percent: parseFloat(currentSumTotal > 0 ? ((currentTotalOtros / currentSumTotal) * 100).toFixed(1) : 0), color: '#52B788', monto: currentTotalOtros }
-          ];
-        }
+        const ptcVecinosVal = parseFloat(currentSumTotal > 0 ? ((currentTotalVecinos / currentSumTotal) * 100).toFixed(1) : 0);
+        const ptcFCMVal = parseFloat(currentSumTotal > 0 ? ((currentTotalFCM / currentSumTotal) * 100).toFixed(1) : 0);
+        const ptcOtrosVal = parseFloat(currentSumTotal > 0 ? ((currentTotalOtros / currentSumTotal) * 100).toFixed(1) : 0);
+
+        const currentOrigenData = [
+          { label: 'Aportes de Vecinos (Ingresos Propios)', percent: ptcVecinosVal, color: '#F77F00', monto: currentTotalVecinos },
+          { label: 'Fondo Común Municipal (FCM)', percent: ptcFCMVal, color: '#006FB3', monto: currentTotalFCM },
+          { label: 'Otras Transferencias / Ingresos', percent: ptcOtrosVal, color: '#52B788', monto: currentTotalOtros }
+        ];
 
         const donutCont = document.getElementById('donutOrigenFondos');
         if (donutCont) {

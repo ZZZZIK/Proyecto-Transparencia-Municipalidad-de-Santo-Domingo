@@ -241,7 +241,7 @@ class ApiController extends \Illuminate\Routing\Controller
             $pctEjecMap = [
                 'Educación' => 92.6,
                 'Salud' => 95.0,
-                'Seguridad Ciudadana' => 95.0,
+                'Seguridad' => 95.0,
                 'Obras Municipales' => 87.9,
                 'Servicios Comunitarios' => 94.0,
                 'Medio Ambiente' => 95.0,
@@ -274,7 +274,7 @@ class ApiController extends \Illuminate\Routing\Controller
             $backupItems = [
                 ['area' => 'Educación', 'asignado' => 3576000000, 'ejecutado' => 3312000000, 'pctEjec' => 92.6],
                 ['area' => 'Salud', 'asignado' => 2384000000, 'ejecutado' => 2265000000, 'pctEjec' => 95.0],
-                ['area' => 'Seguridad Ciudadana', 'asignado' => 1430000000, 'ejecutado' => 1358000000, 'pctEjec' => 95.0],
+                ['area' => 'Seguridad', 'asignado' => 1430000000, 'ejecutado' => 1358000000, 'pctEjec' => 95.0],
                 ['area' => 'Obras Municipales', 'asignado' => 1192000000, 'ejecutado' => 1048000000, 'pctEjec' => 87.9],
                 ['area' => 'Servicios Comunitarios', 'asignado' => 952000000, 'ejecutado' => 895000000, 'pctEjec' => 94.0],
                 ['area' => 'Medio Ambiente', 'asignado' => 714000000, 'ejecutado' => 678000000, 'pctEjec' => 95.0],
@@ -674,7 +674,7 @@ class ApiController extends \Illuminate\Routing\Controller
 
             switch ($tipo) {
                 case 'recaudacion':
-                    DB::table('recaudacion_items')->truncate();
+                    DB::table('recaudacion_items')->delete();
                     foreach ($rows as $row) {
                         DB::table('recaudacion_items')->insert([
                             'nombre'     => $row['nombre'],
@@ -686,6 +686,12 @@ class ApiController extends \Illuminate\Routing\Controller
                     break;
 
                 case 'gastos':
+                    // Calcular el monto total de todas las áreas para normalizar los porcentajes a 100% de forma inteligente
+                    $totalMonto = 0;
+                    foreach ($rows as $row) {
+                        $totalMonto += $this->cleanInt($row['monto_asignado']);
+                    }
+
                     // Obtener las áreas que vienen en el CSV
                     $csvAreas = array_map(fn($row) => $row['area'], $rows);
 
@@ -694,13 +700,16 @@ class ApiController extends \Illuminate\Routing\Controller
 
                     foreach ($rows as $row) {
                         $existing = DB::table('gasto_areas')->where('area', $row['area'])->first();
-                        
+                        $montoAsignado = $this->cleanInt($row['monto_asignado']);
+                        // Calcular porcentaje exacto y proporcional para garantizar que la sumatoria sea 100% exacto
+                        $porcentaje = $totalMonto > 0 ? ($montoAsignado / $totalMonto) * 100 : 0.0;
+
                         if ($existing) {
                             DB::table('gasto_areas')->where('id', $existing->id)->update([
                                 'icono'          => $row['icono'],
                                 'color'          => $row['color'],
-                                'monto_asignado' => $this->cleanInt($row['monto_asignado']),
-                                'porcentaje'     => (float) $row['porcentaje'],
+                                'monto_asignado' => $montoAsignado,
+                                'porcentaje'     => $porcentaje,
                                 'descripcion'    => $row['descripcion'],
                             ]);
                             $registrosActualizados++;
@@ -709,8 +718,8 @@ class ApiController extends \Illuminate\Routing\Controller
                                 'area'           => $row['area'],
                                 'icono'          => $row['icono'],
                                 'color'          => $row['color'],
-                                'monto_asignado' => $this->cleanInt($row['monto_asignado']),
-                                'porcentaje'     => (float) $row['porcentaje'],
+                                'monto_asignado' => $montoAsignado,
+                                'porcentaje'     => $porcentaje,
                                 'descripcion'    => $row['descripcion'],
                             ]);
                             $registrosInsertados++;
@@ -719,7 +728,7 @@ class ApiController extends \Illuminate\Routing\Controller
                     break;
 
                 case 'proyectos':
-                    DB::table('proyectos')->truncate();
+                    DB::table('proyectos')->delete();
                     foreach ($rows as $row) {
                         DB::table('proyectos')->insert([
                             'codigo'     => $row['codigo'],
@@ -734,7 +743,7 @@ class ApiController extends \Illuminate\Routing\Controller
                     break;
 
                 case 'servicios':
-                    DB::table('servicios')->truncate();
+                    DB::table('servicios')->delete();
                     foreach ($rows as $row) {
                         DB::table('servicios')->insert([
                             'servicio'   => $row['servicio'],
@@ -825,8 +834,8 @@ class ApiController extends \Illuminate\Routing\Controller
                             } catch (\Exception $modelEx) {
                                 DB::table('contribuyentes')->insert([
                                     'rut_hash'            => $rutHash,
-                                    'rut_encriptado'      => $row['rut'],
-                                    'nombre_encriptado'   => $row['nombre'],
+                                    'rut_encriptado'      => \Illuminate\Support\Facades\Crypt::encrypt($row['rut']),
+                                    'nombre_encriptado'   => \Illuminate\Support\Facades\Crypt::encrypt($row['nombre']),
                                     'password_hash'       => \Illuminate\Support\Facades\Hash::make('Contribuyente@123'),
                                     'rol'                 => 'ciudadano',
                                     'aporte_contribucion' => $this->cleanInt($row['aporte_contribucion']),
@@ -902,7 +911,15 @@ class ApiController extends \Illuminate\Routing\Controller
             ]);
 
         } catch (\Exception $e) {
-            DB::rollBack();
+            Log::error("uploadTransparencia - Excepción original en try: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+
+            try {
+                if (DB::transactionLevel() > 0) {
+                    DB::rollBack();
+                }
+            } catch (\Exception $rollBackEx) {
+                Log::error("uploadTransparencia - No se pudo hacer rollback: " . $rollBackEx->getMessage());
+            }
 
             // Registrar fallo en auditoría (fuera de la transacción revertida)
             try {
@@ -919,8 +936,6 @@ class ApiController extends \Illuminate\Routing\Controller
             } catch (\Exception $logEx) {
                 Log::error("uploadTransparencia - No se pudo registrar el fallo en auditoría: " . $logEx->getMessage());
             }
-
-            Log::error("uploadTransparencia - Error en carga masiva (ROLLBACK): " . $e->getMessage());
 
             return response()->json([
                 'error'   => 'Error al procesar los datos. La operación fue revertida y los datos anteriores se mantienen intactos.',

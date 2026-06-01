@@ -147,7 +147,7 @@ INSERT INTO `recaudacion_items` (`nombre`, `monto`, `porcentaje`) VALUES
 INSERT INTO `gasto_areas` (`id`, `area`, `icono`, `color`, `monto_asignado`, `porcentaje`, `descripcion`) VALUES
 (1, 'Educación', 'school', '#2E86AB', 3576000000, 30.00, 'Escuelas, liceos e infraestructura educativa.'),
 (2, 'Salud', 'local_hospital', '#E8433E', 2384000000, 20.00, 'CESFAM, postas rurales y prevención.'),
-(3, 'Seguridad Ciudadana', 'shield', '#1B4332', 1430000000, 12.00, 'Vigilancia, iluminación y seguridad comunal.'),
+(3, 'Seguridad', 'shield', '#1B4332', 1430000000, 12.00, 'Vigilancia, iluminación y seguridad comunal.'),
 (4, 'Obras Municipales', 'construction', '#F77F00', 1192000000, 10.00, 'Pavimentación, áreas verdes y equipamiento.'),
 (5, 'Servicios Comunitarios', 'groups', '#7209B7', 952000000, 8.00, 'Programas sociales y organizaciones comunitarias.'),
 (6, 'Medio Ambiente', 'eco', '#52B788', 714000000, 6.00, 'Residuos, reciclaje y conservación costera.'),

@@ -185,76 +185,46 @@ const App = {
       </svg>`;
   },
 
-  // Fetch JSON data with graceful API fallback
+  // Fetch JSON data strictly from Laravel API
   async loadJSON(path) {
-    try {
-      const baseApi = this.getBaseApiUrl();
-      if (!baseApi) throw new Error("Offline file protocol detected, skipping API.");
-
-      // Reemplaza ruta local por la ruta de la API dinámicamente
-      let filename = path.split('/').pop().replace('.json', '');
-      let apiPath = `${baseApi}/${filename}`;
-      
-      // Si la búsqueda contiene parámetros en la URL (ej. query params de RUT), los pasamos
-      if (window.location.search) {
-        apiPath += window.location.search;
-      }
-      
-      const resp = await fetch(apiPath);
-      if (!resp.ok) throw new Error(`API Fallback to ${path}`);
-      const data = await resp.json();
-      console.log('Datos cargados dinámicamente desde API:', apiPath);
-      return data;
-    } catch (e) {
-      console.warn('API no disponible, cargando JSON estático de respaldo:', e);
-      try {
-        const resp = await fetch(path);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return await resp.json();
-      } catch (err) {
-        console.error('Error cargando datos estáticos:', err);
-        return null;
-      }
+    const baseApi = this.getBaseApiUrl();
+    if (!baseApi) {
+      throw new Error("No se pudo detectar el servidor del backend Laravel.");
     }
+
+    // Extraer el nombre del endpoint eliminando parámetros de consulta y extensión .json
+    let cleanPath = path.split('?')[0];
+    let filename = cleanPath.split('/').pop().replace('.json', '');
+    let apiPath = `${baseApi}/${filename}`;
+    
+    // Anexar parámetros de consulta si vienen en la ruta o en la URL actual de la ventana
+    let queryString = path.includes('?') ? '?' + path.split('?')[1] : '';
+    if (!queryString && window.location.search) {
+      queryString = window.location.search;
+    }
+    apiPath += queryString;
+    
+    const resp = await fetch(apiPath);
+    if (!resp.ok) {
+      throw new Error(`Error en el servidor: HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    console.log('Datos cargados dinámicamente desde API:', apiPath);
+    return data;
   },
 
-  // Fetch active transparency query periods
+  // Fetch active transparency query periods strictly from Laravel API
   async getPeriodosHabilitados() {
-    try {
-      const baseApi = this.getBaseApiUrl();
-      if (!baseApi) throw new Error("Offline");
-
-      const resp = await fetch(`${baseApi}/periodos`);
-      if (!resp.ok) throw new Error("ServerError");
-      const data = await resp.json();
-      if (data && data.length > 0) {
-        localStorage.setItem('transparencia_periodos', JSON.stringify(data));
-        return data;
-      }
-      throw new Error("Empty");
-    } catch (e) {
-      console.warn("Utilizando periodos locales de localStorage:", e);
-      const local = localStorage.getItem('transparencia_periodos');
-      if (local) {
-        return JSON.parse(local);
-      }
-      // Semillas por defecto si no hay nada
-      const defaultPeriods = [];
-      const years = [2023, 2024, 2025, 2026];
-      years.forEach(y => {
-        const months = ['anual', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
-        months.forEach(m => {
-          defaultPeriods.push({
-            anio: y,
-            mes: m,
-            nombre_mes: m === 'anual' ? 'Anual (completo)' : ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][parseInt(m)-1],
-            habilitado: y === 2026 ? 0 : 1 // 2026 deshabilitado por defecto
-          });
-        });
-      });
-      localStorage.setItem('transparencia_periodos', JSON.stringify(defaultPeriods));
-      return defaultPeriods;
+    const baseApi = this.getBaseApiUrl();
+    if (!baseApi) {
+      throw new Error("No se pudo detectar el servidor del backend Laravel.");
     }
+
+    const resp = await fetch(`${baseApi}/periodos`);
+    if (!resp.ok) {
+      throw new Error(`Error en el servidor al consultar períodos: HTTP ${resp.status}`);
+    }
+    return await resp.json();
   },
 
   // Dynamic navbar injection for Admin user role
