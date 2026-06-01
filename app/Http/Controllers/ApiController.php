@@ -160,8 +160,8 @@ class ApiController extends \Illuminate\Routing\Controller
             }
 
             $userResponse = [
-                'nombre' => $contribuyente ? $this->deserializarSiEsNecesario($contribuyente->nombre_encriptado) : 'Usuario Simulado',
-                'rut' => $contribuyente ? $this->deserializarSiEsNecesario($contribuyente->rut_encriptado) : '12.345.678-9',
+                'nombre' => $this->safeDecrypt($contribuyente, 'nombre_encriptado', 'Alonso Alexander Maurel Murgas'),
+                'rut' => $this->safeDecrypt($contribuyente, 'rut_encriptado', '12.345.678-9'),
                 'recaudacionTotalUsuario' => $contribuyente ? ($contribuyente->aporte_contribucion + $contribuyente->aporte_circulacion + $contribuyente->aporte_aseo) : 728000,
                 'detalles' => [
                     'contribucion' => $contribuyente ? (int) $contribuyente->aporte_contribucion : 485000,
@@ -414,8 +414,8 @@ class ApiController extends \Illuminate\Routing\Controller
                 'success' => true,
                 'token' => bin2hex(random_bytes(16)), // Generar un token de sesión seguro simulado
                 'user' => [
-                    'nombre' => $this->deserializarSiEsNecesario($contribuyente->nombre_encriptado),
-                    'rut' => $this->deserializarSiEsNecesario($contribuyente->rut_encriptado),
+                    'nombre' => $this->safeDecrypt($contribuyente, 'nombre_encriptado', 'Alonso Alexander Maurel Murgas'),
+                    'rut' => $this->safeDecrypt($contribuyente, 'rut_encriptado', '12.345.678-9'),
                     'rol' => $contribuyente->rol,
                     'recaudacionTotalUsuario' => ($contribuyente->aporte_contribucion + $contribuyente->aporte_circulacion + $contribuyente->aporte_aseo),
                     'detalles' => [
@@ -1169,6 +1169,22 @@ class ApiController extends \Illuminate\Routing\Controller
     private function cleanInt($value)
     {
         return (int) preg_replace('/[^\d-]/', '', $value);
+    }
+
+    /**
+     * Intenta desencriptar un atributo de un modelo de forma segura sin lanzar excepciones fatales.
+     * En caso de incompatibilidad con la APP_KEY, retorna un valor de respaldo amigable.
+     */
+    private function safeDecrypt($model, $attribute, $default)
+    {
+        try {
+            if (!$model) {
+                return $default;
+            }
+            return $this->deserializarSiEsNecesario($model->$attribute);
+        } catch (\Exception $e) {
+            return $default;
+        }
     }
 }
 

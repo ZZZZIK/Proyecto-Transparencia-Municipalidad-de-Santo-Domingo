@@ -24,56 +24,114 @@
       "icono": "school",
       "color": "#2E86AB",
       "porcentaje": 30.0,
-      "descripcion": "Mantenimiento de colegios, pago docentes y becas"
+      "descripcion": "Mantenimiento de colegios, pago docentes y becas",
+      "subItems": [
+        {"nombre": "Personal Docente", "monto": 6316200000},
+        {"nombre": "Infraestructura Escolar", "monto": 1577700000},
+        {"nombre": "Programas Educativos", "monto": 1053400000},
+        {"nombre": "Material y Tecnología", "monto": 630100000},
+        {"nombre": "Becas", "monto": 526900000},
+        {"nombre": "Alimentación Escolar", "monto": 420900000}
+      ]
     },
     {
       "area": "Salud",
       "icono": "local_hospital",
       "color": "#E8433E",
       "porcentaje": 20.0,
-      "descripcion": "Atención primaria, insumos CESFAM y urgencias"
+      "descripcion": "Atención primaria, insumos CESFAM y urgencias",
+      "subItems": [
+        {"nombre": "Personal de Salud", "monto": 3513200000},
+        {"nombre": "Insumos y Medicamentos", "monto": 1054900000},
+        {"nombre": "Mantención CESFAM", "monto": 701300000},
+        {"nombre": "Prevención", "monto": 701300000},
+        {"nombre": "Equipamiento", "monto": 527500000},
+        {"nombre": "Atención Dental", "monto": 527500000}
+      ]
     },
     {
       "area": "Seguridad",
       "icono": "security",
       "color": "#F77F00",
       "porcentaje": 12.0,
-      "descripcion": "Vehículos de patrullaje, cámaras y prevención"
+      "descripcion": "Vehículos de patrullaje, cámaras y prevención",
+      "subItems": [
+        {"nombre": "Televigilancia", "monto": 1259100000},
+        {"nombre": "Iluminación LED", "monto": 1048000000},
+        {"nombre": "Oficina Seguridad", "monto": 839300000},
+        {"nombre": "Plan Cuadrante", "monto": 631200000},
+        {"nombre": "Alarmas Comunitarias", "monto": 420200000}
+      ]
     },
     {
       "area": "Obras",
       "icono": "construction",
       "color": "#52B788",
       "porcentaje": 10.0,
-      "descripcion": "Pavimentación, plazas y alumbrado público"
+      "descripcion": "Pavimentación, plazas y alumbrado público",
+      "subItems": [
+        {"nombre": "Pavimentación", "monto": 1053400000},
+        {"nombre": "Áreas Verdes", "monto": 701200000},
+        {"nombre": "Edificios Municipales", "monto": 701200000},
+        {"nombre": "Sedes Comunitarias", "monto": 526900000},
+        {"nombre": "Señalización", "monto": 526900000}
+      ]
     },
     {
       "area": "Comunidad",
       "icono": "groups",
       "color": "#7209B7",
       "porcentaje": 8.0,
-      "descripcion": "Subsidios, talleres y ayuda social directa"
+      "descripcion": "Subsidios, talleres y ayuda social directa",
+      "subItems": [
+        {"nombre": "Adulto Mayor", "monto": 701300000},
+        {"nombre": "Protección de Derechos", "monto": 559900000},
+        {"nombre": "Inclusión", "monto": 559900000},
+        {"nombre": "Org. Comunitarias", "monto": 559900000},
+        {"nombre": "Registro Social", "monto": 424200000}
+      ]
     },
     {
       "area": "Medio Ambiente",
       "icono": "eco",
       "color": "#1B4332",
       "porcentaje": 6.0,
-      "descripcion": "Recolección basura, reciclaje y áreas verdes"
+      "descripcion": "Recolección basura, reciclaje y áreas verdes",
+      "subItems": [
+        {"nombre": "Recolección Residuos", "monto": 947100000},
+        {"nombre": "Reciclaje", "monto": 421900000},
+        {"nombre": "Ecosistemas Costeros", "monto": 315700000},
+        {"nombre": "Educación Ambiental", "monto": 209500000},
+        {"nombre": "Monitoreo", "monto": 212400000}
+      ]
     },
     {
       "area": "Cultura",
       "icono": "palette",
       "color": "#E09F3E",
       "porcentaje": 5.0,
-      "descripcion": "Eventos, bibliotecas y fomento deportivo"
+      "descripcion": "Eventos, bibliotecas y fomento deportivo",
+      "subItems": [
+        {"nombre": "Instalaciones Deportivas", "monto": 525800000},
+        {"nombre": "Eventos Culturales", "monto": 440200000},
+        {"nombre": "Escuelas Deportivas", "monto": 351500000},
+        {"nombre": "Talleres", "monto": 262900000},
+        {"nombre": "Biblioteca", "monto": 177200000}
+      ]
     },
     {
       "area": "Administración",
       "icono": "account_balance",
       "color": "#6C757D",
       "porcentaje": 9.0,
-      "descripcion": "Gastos operativos, sistemas y personal"
+      "descripcion": "Gastos operativos, sistemas y personal",
+      "subItems": [
+        {"nombre": "Personal Administrativo", "monto": 1898700000},
+        {"nombre": "Tecnología", "monto": 476100000},
+        {"nombre": "Servicios Básicos", "monto": 317400000},
+        {"nombre": "Insumos", "monto": 252700000},
+        {"nombre": "Capacitación", "monto": 220400000}
+      ]
     }
   ],
   "proyeccionesFinancieras": {
