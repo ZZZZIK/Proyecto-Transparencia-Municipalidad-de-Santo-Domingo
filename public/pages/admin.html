@@ -915,7 +915,18 @@
       } else {
         icon.textContent = 'error';
         title.textContent = 'Error en la Carga';
-        message.textContent = data.error || 'Ocurrió un error al procesar el archivo. Los datos anteriores se mantienen intactos.';
+        
+        let errorMsg = data.error || 'Ocurrió un error al procesar el archivo. Los datos anteriores se mantienen intactos.';
+        if (data.detalle) {
+          if (typeof data.detalle === 'string') {
+            errorMsg = data.detalle;
+          } else if (typeof data.detalle === 'object') {
+            // Aplanar y concatenar todos los mensajes de error de validación
+            errorMsg = Object.values(data.detalle).flat().join(' ');
+          }
+        }
+        
+        message.textContent = errorMsg;
         summary.innerHTML = '';
       }
     }

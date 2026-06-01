@@ -569,7 +569,7 @@ class ApiController extends \Illuminate\Routing\Controller
         // 1. Validar inputs básicos
         try {
             $request->validate([
-                'archivo'       => 'required|file|mimes:csv,txt|max:5120',
+                'archivo'       => 'required|file|max:5120',
                 'tipo_carga'    => 'required|string|in:recaudacion,gastos,proyectos,servicios,metadata,contribuyentes',
                 'admin_rut_hash' => 'required|string|size:64',
             ]);
@@ -584,6 +584,15 @@ class ApiController extends \Illuminate\Routing\Controller
         $adminHash  = $request->input('admin_rut_hash');
         $file       = $request->file('archivo');
         $fileName   = $file->getClientOriginalName();
+        $extension  = strtolower($file->getClientOriginalExtension());
+
+        // Validar extensión de forma robusta e independiente del sistema operativo / navegador (evita fallos de MIME de Excel en Windows)
+        if ($extension !== 'csv') {
+            return response()->json([
+                'error'   => 'Datos de entrada inválidos.',
+                'detalle' => ['archivo' => ['El archivo debe tener una extensión con formato .csv']]
+            ], 422);
+        }
 
         // 2. Verificar que el hash corresponde a un usuario con rol admin
         try {
