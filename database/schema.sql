@@ -8,6 +8,10 @@
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
+-- Crear y usar la base de datos del proyecto
+CREATE DATABASE IF NOT EXISTS `transparencia_santo_domingo` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `transparencia_santo_domingo`;
+
 -- -------------------------------------------------------------------------
 -- 1. Estructura de Tablas
 -- -------------------------------------------------------------------------
